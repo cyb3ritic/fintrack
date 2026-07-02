@@ -1,12 +1,8 @@
 {
   "name": "fintrack",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Secure, local-first Desktop Expense & Investment Tracker",
   "author": "cyb3ritic",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/cyb3ritic/fintrack.git"
-  },
   "main": "dist-electron/index.js",
   "scripts": {
     "dev:renderer": "vite",
@@ -75,13 +71,6 @@
       "uninstallDisplayName": "FinTrack",
       "runAfterFinish": true,
       "include": "build/installer.nsh"
-    },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "cyb3ritic",
-        "repo": "fintrack"
-      }
-    ]
+    }
   }
 }
