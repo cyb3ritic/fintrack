@@ -27,3 +27,6 @@ dist-pack/
 # OS files
 .DS_Store
 Thumbs.db
+
+# environment file
+.env
