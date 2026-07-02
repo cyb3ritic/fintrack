@@ -65,10 +65,8 @@ declare global {
       selectBackupFile: () => Promise<{ canceled: boolean; filePath?: string }>;
       restoreDatabase: (filePath: string, password: string) => Promise<{ success: boolean; error?: string }>;
       
-      authenticate: () => Promise<{ success: boolean; error?: string }>;
-      isDatabaseLocked: () => Promise<boolean>;
-      
       checkForUpdates: () => Promise<{ success: boolean; error?: string }>;
+      downloadUpdate: () => Promise<{ success: boolean; error?: string }>;
       quitAndInstall: () => Promise<void>;
       onUpdateStatus: (callback: (status: string) => void) => () => void;
       onUpdateAvailable: (callback: (available: boolean, version?: string) => void) => () => void;
@@ -92,11 +90,6 @@ export function useDatabase() {
 
   const refreshData = useCallback(async () => {
     try {
-      const isLocked = await window.api.isDatabaseLocked();
-      if (isLocked) {
-        setLoading(false);
-        return;
-      }
       setLoading(true);
       const [txData, invData, catData, statsData] = await Promise.all([
         window.api.getTransactions(filters),

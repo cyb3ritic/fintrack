@@ -22,12 +22,9 @@ contextBridge.exposeInMainWorld('api', {
   restoreDatabase: (filePath: string, password: string) => ipcRenderer.invoke('sys:restore', filePath, password),
   selectBackupFile: () => ipcRenderer.invoke('sys:select-backup-file'),
 
-  // Authentication & Locking
-  authenticate: () => ipcRenderer.invoke('sys:authenticate'),
-  isDatabaseLocked: () => ipcRenderer.invoke('sys:is-db-locked'),
-
   // Software Updates
   checkForUpdates: () => ipcRenderer.invoke('sys:check-for-updates'),
+  downloadUpdate: () => ipcRenderer.invoke('sys:download-update'),
   quitAndInstall: () => ipcRenderer.invoke('sys:quit-and-install'),
   onUpdateStatus: (callback: (status: string) => void) => {
     const subscription = (_event: any, status: string) => callback(status);

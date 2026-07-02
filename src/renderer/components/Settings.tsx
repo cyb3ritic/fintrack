@@ -22,6 +22,7 @@ export default function Settings() {
   const [isUpdateReady, setIsUpdateReady] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [newVersion, setNewVersion] = useState('');
+  const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
 
   useEffect(() => {
     // Listeners
@@ -29,7 +30,7 @@ export default function Settings() {
       if (status === 'checking') {
         setUpdateStatus('Checking for updates...');
       } else if (status === 'available') {
-        setUpdateStatus('Update found! Downloading...');
+        setUpdateStatus('Update available!');
       } else if (status === 'up-to-date') {
         setUpdateStatus('App is up to date.');
         setIsCheckingUpdate(false);
@@ -48,6 +49,7 @@ export default function Settings() {
     const removeAvailableListener = window.api.onUpdateAvailable((available: boolean, version?: string) => {
       if (available && version) {
         setNewVersion(version);
+        setShowUpdatePrompt(true);
       }
     });
 
@@ -76,6 +78,21 @@ export default function Settings() {
 
   const handleInstallUpdate = async () => {
     await window.api.quitAndInstall();
+  };
+
+  const handleStartDownload = async () => {
+    setShowUpdatePrompt(false);
+    setUpdateStatus('Downloading update...');
+    try {
+      const result = await window.api.downloadUpdate();
+      if (!result.success) {
+        setUpdateStatus(`Download failed: ${result.error}`);
+        showToast(`Download failed: ${result.error}`, 'error');
+      }
+    } catch (err: any) {
+      setUpdateStatus(`Download error: ${err.message}`);
+      showToast(`Download error: ${err.message}`, 'error');
+    }
   };
 
   const handleBackupSubmit = async (e: React.FormEvent) => {
@@ -294,7 +311,7 @@ export default function Settings() {
                   onClick={handleInstallUpdate}
                   className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-accent-emerald text-white font-semibold text-sm shadow-glow-emerald transition-all animate-pulse"
                 >
-                  Restart to Install
+                  Restart App to Load Update
                 </button>
               ) : (
                 <button
@@ -378,6 +395,54 @@ export default function Settings() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Update Available Prompt Modal */}
+      {showUpdatePrompt && newVersion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-md bg-card/95 border border-border p-6 rounded-2xl shadow-2xl flex flex-col gap-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-accent-indigo/10 text-accent-indigo">
+                <RefreshCw className="w-5 h-5 animate-spin" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-200">New Update Available</h3>
+                <p className="text-xs text-gray-500">Version {newVersion} is now available.</p>
+              </div>
+            </div>
+
+            <div className="text-xs text-gray-400 bg-gray-900/40 p-4 rounded-xl border border-border/50 leading-relaxed flex flex-col gap-2.5">
+              <span className="font-semibold text-gray-300">Update Details:</span>
+              <p>
+                FinTrack will download the latest update files automatically. The installation will run seamlessly in the background.
+              </p>
+              <div className="text-[11px] text-accent-indigo font-semibold bg-accent-indigo/10 p-2 rounded border border-accent-indigo/20">
+                ⚠️ Secure Local Storage: All vault transactions and assets will be fully preserved during this update. No data is lost.
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUpdatePrompt(false);
+                  setIsCheckingUpdate(false);
+                  setUpdateStatus(`Update available (v${newVersion})`);
+                }}
+                className="flex-1 py-2.5 rounded-xl border border-border text-gray-400 hover:text-gray-200 hover:bg-card text-sm font-semibold transition-all"
+              >
+                Later
+              </button>
+              <button
+                type="button"
+                onClick={handleStartDownload}
+                className="flex-1 py-2.5 rounded-xl bg-accent-indigo text-white hover:bg-accent-indigo/90 text-sm font-semibold shadow-glow-indigo transition-all"
+              >
+                Download & Install
+              </button>
+            </div>
           </div>
         </div>
       )}
