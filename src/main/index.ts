@@ -1,10 +1,43 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, safeStorage, systemPreferences } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import AdmZip from 'adm-zip';
 import * as db from './db';
 import { autoUpdater } from 'electron-updater';
+
+// ----------------------------------------------------
+// SECURE DATABASE KEY STORAGE (Electron safeStorage)
+// ----------------------------------------------------
+const keyPath = path.join(app.getPath('userData'), 'vault_key.bin');
+let activeDatabaseKey: string | null = null;
+
+function ensureDatabaseKeyExists(): void {
+  if (fs.existsSync(keyPath)) {
+    return;
+  }
+  try {
+    const rawKey = crypto.randomBytes(32).toString('hex');
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error('OS safeStorage is not available.');
+    }
+    const encryptedKeyBuffer = safeStorage.encryptString(rawKey);
+    fs.writeFileSync(keyPath, encryptedKeyBuffer);
+  } catch (error) {
+    console.error('Failed to generate secure database key:', error);
+  }
+}
+
+function getDecryptedDatabaseKey(): string {
+  if (!fs.existsSync(keyPath)) {
+    throw new Error('Database encryption key file not found.');
+  }
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('OS safeStorage is not available.');
+  }
+  const encryptedKeyBuffer = fs.readFileSync(keyPath);
+  return safeStorage.decryptString(encryptedKeyBuffer);
+}
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -45,7 +78,7 @@ function createWindow() {
 
 // Initialize application
 app.whenReady().then(() => {
-  db.initDatabase();
+  ensureDatabaseKeyExists();
   createWindow();
 
   app.on('activate', () => {
@@ -93,6 +126,32 @@ function decryptBuffer(buffer: Buffer, password: string): Buffer {
 
 ipcMain.handle('db:get-transactions', async (_, filters) => {
   return db.getTransactions(filters);
+});
+
+ipcMain.handle('sys:authenticate', async () => {
+  if (process.platform === 'darwin') {
+    if (systemPreferences.canPromptTouchID && systemPreferences.canPromptTouchID()) {
+      try {
+        await systemPreferences.promptTouchID('Unlock your FinTrack Vault');
+      } catch (err: any) {
+        return { success: false, error: 'Authentication failed' };
+      }
+    }
+  }
+
+  try {
+    const rawKey = getDecryptedDatabaseKey();
+    db.openSecureDatabase(rawKey);
+    activeDatabaseKey = rawKey;
+    return { success: true };
+  } catch (err: any) {
+    console.error('Failed to unlock database:', err);
+    return { success: false, error: 'Failed to decrypt secure vault key: ' + err.message };
+  }
+});
+
+ipcMain.handle('sys:is-db-locked', async () => {
+  return !db.isDatabaseUnlocked();
 });
 
 ipcMain.handle('db:add-transaction', async (_, tx) => {
@@ -235,7 +294,9 @@ ipcMain.handle('sys:restore', async (_, filePath, password) => {
 
     if (!dbEntry) {
       // Re-init current db in case of failure
-      db.initDatabase();
+      if (activeDatabaseKey) {
+        db.openSecureDatabase(activeDatabaseKey);
+      }
       return { success: false, error: 'Invalid backup structure: tracker.db not found' };
     }
 
@@ -243,7 +304,13 @@ ipcMain.handle('sys:restore', async (_, filePath, password) => {
     fs.writeFileSync(dbPath, dbEntry.getData());
 
     // Reopen/initialize database
-    db.initDatabase();
+    if (activeDatabaseKey) {
+      db.openSecureDatabase(activeDatabaseKey);
+    } else {
+      const rawKey = getDecryptedDatabaseKey();
+      db.openSecureDatabase(rawKey);
+      activeDatabaseKey = rawKey;
+    }
 
     // Reload the main window to force frontend reload
     mainWindow.reload();
@@ -252,7 +319,11 @@ ipcMain.handle('sys:restore', async (_, filePath, password) => {
   } catch (error: any) {
     console.error('Restore error:', error);
     // Ensure database is initialized in case of sudden error
-    try { db.initDatabase(); } catch {}
+    try {
+      if (activeDatabaseKey) {
+        db.openSecureDatabase(activeDatabaseKey);
+      }
+    } catch {}
     return { success: false, error: error.message };
   }
 });

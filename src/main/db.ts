@@ -1,11 +1,11 @@
-import Database from 'better-sqlite3';
+import Database from 'better-sqlite3-multiple-ciphers';
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
 
 let db: Database.Database;
 
-export function initDatabase() {
+export function openSecureDatabase(key: string) {
   const userDataPath = app.getPath('userData');
   const dbPath = path.join(userDataPath, 'tracker.db');
 
@@ -14,9 +14,22 @@ export function initDatabase() {
     fs.mkdirSync(userDataPath, { recursive: true });
   }
 
+  // Open the database using the multiple ciphers library
   db = new Database(dbPath, { verbose: console.log });
+
+  // Apply the database encryption key
+  db.pragma(`key = '${key}'`);
   db.pragma('journal_mode = WAL');
 
+  // Initialize table schema and seeds
+  initializeTables();
+}
+
+export function isDatabaseUnlocked(): boolean {
+  return !!db;
+}
+
+function initializeTables() {
   // 1. Transactions Table
   db.exec(`
     CREATE TABLE IF NOT EXISTS transactions (
