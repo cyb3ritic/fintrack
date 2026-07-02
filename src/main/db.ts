@@ -5,6 +5,63 @@ import fs from 'fs';
 
 let db: Database.Database;
 
+function migratePlaintextToEncrypted(dbPath: string, key: string): void {
+  if (!fs.existsSync(dbPath)) {
+    return;
+  }
+
+  let isPlaintext = false;
+  let tempDb: Database.Database | null = null;
+  try {
+    // Try to open the database file without any encryption key
+    tempDb = new Database(dbPath);
+    // Execute a query to see if we can read the schema
+    tempDb.prepare("SELECT name FROM sqlite_master LIMIT 1").get();
+    isPlaintext = true;
+  } catch (err) {
+    // If it throws an error (e.g. "file is not a database"), it is already encrypted or corrupt
+    isPlaintext = false;
+  } finally {
+    if (tempDb) {
+      tempDb.close();
+    }
+  }
+
+  if (isPlaintext) {
+    console.log("Detecting unencrypted v1.0.0 database. Upgrading to encrypted v2.0.0...");
+    const tempEncryptedPath = dbPath + '_encrypted';
+
+    if (fs.existsSync(tempEncryptedPath)) {
+      fs.unlinkSync(tempEncryptedPath);
+    }
+
+    try {
+      const plaintextDb = new Database(dbPath);
+      // Flush WAL journal into the main DB file and delete log files cleanly before migration
+      plaintextDb.pragma('journal_mode = DELETE');
+
+      const escapedEncryptedPath = tempEncryptedPath.replace(/'/g, "''");
+      const escapedKey = key.replace(/'/g, "''");
+
+      plaintextDb.exec(`ATTACH DATABASE '${escapedEncryptedPath}' AS encrypted KEY '${escapedKey}'`);
+      plaintextDb.exec("SELECT sqlcipher_export('encrypted')");
+      plaintextDb.exec("DETACH DATABASE encrypted");
+      plaintextDb.close();
+
+      // Replace the plaintext database with the new encrypted version
+      fs.unlinkSync(dbPath);
+      fs.renameSync(tempEncryptedPath, dbPath);
+      console.log("Database encryption migration completed successfully.");
+    } catch (migrationError) {
+      console.error("Failed to migrate unencrypted database to SQLCipher:", migrationError);
+      if (fs.existsSync(tempEncryptedPath)) {
+        try { fs.unlinkSync(tempEncryptedPath); } catch {}
+      }
+      throw migrationError;
+    }
+  }
+}
+
 export function openSecureDatabase(key: string) {
   const userDataPath = app.getPath('userData');
   const dbPath = path.join(userDataPath, 'tracker.db');
@@ -13,6 +70,9 @@ export function openSecureDatabase(key: string) {
   if (!fs.existsSync(userDataPath)) {
     fs.mkdirSync(userDataPath, { recursive: true });
   }
+
+  // Handle unencrypted database upgrade if necessary
+  migratePlaintextToEncrypted(dbPath, key);
 
   // Open the database using the multiple ciphers library
   db = new Database(dbPath, { verbose: console.log });
