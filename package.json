@@ -64,9 +64,6 @@
     "win": {
       "target": [
         "nsis"
-      ],
-      "publish": [
-        "github"
       ]
     },
     "nsis": {
