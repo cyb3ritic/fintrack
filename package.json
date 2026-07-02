@@ -71,6 +71,11 @@
       "uninstallDisplayName": "FinTrack",
       "runAfterFinish": true,
       "include": "build/installer.nsh"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "cyb3ritic",
+      "repo": "fintrack"
     }
   }
 }
