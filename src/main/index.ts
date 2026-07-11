@@ -100,27 +100,11 @@ ipcMain.handle('db:add-transaction', async (_, tx) => {
 });
 
 ipcMain.handle('db:update-transaction', async (_, id, tx) => {
-  return db.updateTransaction(id, tx);
+  return db.updateTransaction(Number(id), tx);
 });
 
 ipcMain.handle('db:delete-transaction', async (_, id) => {
-  return db.deleteTransaction(id);
-});
-
-ipcMain.handle('db:get-investments', async () => {
-  return db.getInvestments();
-});
-
-ipcMain.handle('db:add-investment', async (_, inv) => {
-  return db.addInvestment(inv);
-});
-
-ipcMain.handle('db:update-investment', async (_, id, inv) => {
-  return db.updateInvestment(id, inv);
-});
-
-ipcMain.handle('db:delete-investment', async (_, id) => {
-  return db.deleteInvestment(id);
+  return db.deleteTransaction(Number(id));
 });
 
 ipcMain.handle('db:get-categories', async () => {

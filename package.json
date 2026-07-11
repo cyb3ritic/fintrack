@@ -1,7 +1,7 @@
 {
   "name": "fintrack",
-  "version": "1.0.1",
-  "description": "Secure, local-first Desktop Expense & Investment Tracker",
+  "version": "2.0.0",
+  "description": "Secure, local-first Desktop Expense Tracker",
   "author": "cyb3ritic",
   "repository": {
     "type": "git",

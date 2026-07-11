@@ -5,7 +5,7 @@ import {
   Zap, Tv, ShoppingBag, Car, HeartPulse, Layers, Lock, Coins, 
   CircleDot, FolderOpen, Edit2, Trash2, ChevronDown, AlertCircle, Eye, EyeOff, X
 } from 'lucide-react';
-import { Transaction, Category, Investment } from '../hooks/useDatabase';
+import { Transaction, Category } from '../hooks/useDatabase';
 import { formatDate } from '../utils/format';
 import { useToast } from './Toast';
 import { useCurrency } from '../context/CurrencyContext';
@@ -13,7 +13,6 @@ import { useCurrency } from '../context/CurrencyContext';
 interface TransactionsProps {
   transactions: Transaction[];
   categories: Category[];
-  investments: Investment[];
   filters: any;
   setFilters: (filters: any) => void;
   addTransaction: (tx: any) => Promise<any>;
@@ -24,7 +23,6 @@ interface TransactionsProps {
 export default function Transactions({
   transactions,
   categories,
-  investments,
   filters,
   setFilters,
   addTransaction,
@@ -35,6 +33,7 @@ export default function Transactions({
   const { formatCurrency } = useCurrency();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Search text filter (applied client-side for ultra-fast responsive feedback)
   const [search, setSearch] = useState('');
@@ -49,16 +48,13 @@ export default function Transactions({
     return <Component className="w-3.5 h-3.5 animate-pulse" style={{ color }} />;
   };
 
-  // Form states
   const [formData, setFormData] = useState({
-    type: 'expense' as 'income' | 'expense' | 'investment',
+    type: 'expense' as 'income' | 'expense',
     amount: '',
     date: new Date().toISOString().substring(0, 10),
     category: '',
     subcategory: '',
     note: '',
-    asset_id: '',
-    activity_type: 'buy' as 'buy' | 'sell' | 'dividend' | 'none',
   });
 
   const [isAmountMasked, setIsAmountMasked] = useState<boolean>(() => {
@@ -91,8 +87,6 @@ export default function Transactions({
       category: tx.category,
       subcategory: tx.subcategory || '',
       note: tx.note || '',
-      asset_id: tx.asset_id ? tx.asset_id.toString() : '',
-      activity_type: tx.activity_type || 'buy',
     });
     setIsModalOpen(true);
   };
@@ -108,8 +102,6 @@ export default function Transactions({
       category: firstExpenseCat,
       subcategory: '',
       note: '',
-      asset_id: '',
-      activity_type: 'buy',
     });
     setIsModalOpen(true);
   };
@@ -117,6 +109,8 @@ export default function Transactions({
   // Form Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     const amountVal = parseFloat(formData.amount);
     
     if (isNaN(amountVal) || amountVal <= 0) {
@@ -127,9 +121,9 @@ export default function Transactions({
     const payload = {
       ...formData,
       amount: amountVal,
-      asset_id: formData.type === 'investment' && formData.asset_id ? parseInt(formData.asset_id, 10) : null,
     };
 
+    setIsSubmitting(true);
     try {
       if (editingTransaction) {
         await updateTransaction(editingTransaction.id, payload);
@@ -139,19 +133,25 @@ export default function Transactions({
         showToast('Transaction added successfully', 'success');
       }
       setIsModalOpen(false);
+      setEditingTransaction(null);
     } catch (err: any) {
       showToast(`Operation failed: ${err.message}`, 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Delete transaction handler
   const handleDeleteClick = async (id: number) => {
     if (confirm('Are you sure you want to delete this transaction?')) {
+      setIsSubmitting(true);
       try {
-        await deleteTransaction(id);
+        await deleteTransaction(Number(id));
         showToast('Transaction deleted successfully', 'success');
       } catch (err: any) {
         showToast(`Deletion failed: ${err.message}`, 'error');
+      } finally {
+        setIsSubmitting(false);
       }
     }
   };
@@ -202,7 +202,7 @@ export default function Transactions({
 
           {/* Type Filter */}
           <div className="flex bg-card/50 rounded-xl border border-border p-1 col-span-12 sm:col-span-6 lg:col-span-4 min-w-0">
-            {['all', 'income', 'expense', 'investment'].map((t) => (
+            {['all', 'income', 'expense'].map((t) => (
               <button
                 key={t}
                 onClick={() => setFilters({ ...filters, type: t })}
@@ -314,9 +314,7 @@ export default function Transactions({
                       className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded ${
                         tx.type === 'income'
                           ? 'bg-accent-emerald/10 text-accent-emerald'
-                          : tx.type === 'expense'
-                          ? 'bg-accent-rose/10 text-accent-rose'
-                          : 'bg-accent-indigo/10 text-accent-indigo'
+                          : 'bg-accent-rose/10 text-accent-rose'
                       }`}
                     >
                       {tx.type}
@@ -345,16 +343,22 @@ export default function Transactions({
                   {/* Actions & Amount col */}
                   <div className="col-span-2 flex justify-end items-center gap-4">
                     {/* Hover actions */}
-                    <div className="flex gap-2.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
+                    <div className="flex gap-2.5 transition-opacity pointer-events-auto">
                       <button
+                        type="button"
                         onClick={() => handleEditClick(tx)}
-                        className="text-gray-500 hover:text-accent-indigo p-1 rounded hover:bg-gray-800/40 transition-colors"
+                        disabled={isSubmitting}
+                        className="text-gray-500 hover:text-accent-indigo p-1 rounded hover:bg-gray-800/40 transition-colors disabled:opacity-50"
+                        aria-label={`Edit ${tx.category} transaction`}
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleDeleteClick(tx.id)}
-                        className="text-gray-500 hover:text-accent-rose p-1 rounded hover:bg-gray-800/40 transition-colors"
+                        disabled={isSubmitting}
+                        className="text-gray-500 hover:text-accent-rose p-1 rounded hover:bg-gray-800/40 transition-colors disabled:opacity-50"
+                        aria-label={`Delete ${tx.category} transaction`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -364,9 +368,7 @@ export default function Transactions({
                       className={`font-bold select-all ${
                         tx.type === 'income'
                           ? 'text-accent-emerald'
-                          : tx.type === 'expense'
-                          ? 'text-accent-rose'
-                          : 'text-accent-indigo'
+                          : 'text-accent-rose'
                       } ${isAmountMasked ? 'blur-md select-none transition-all duration-300' : ''}`}
                     >
                       {tx.type === 'expense' ? '-' : ''}
@@ -415,22 +417,19 @@ export default function Transactions({
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 {/* Segments: Type */}
                 <div className="flex bg-card/60 rounded-xl border border-border p-1 w-full">
-                  {['income', 'expense', 'investment'].map((t) => (
+                  {['income', 'expense'].map((t) => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setFormData({ 
                         ...formData, 
-                        type: t as any,
-                        asset_id: t === 'investment' ? formData.asset_id : ''
+                        type: t as any
                       })}
                       className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors capitalize ${
                         formData.type === t
                           ? t === 'income'
                             ? 'bg-accent-emerald/20 text-accent-emerald'
-                            : t === 'expense'
-                            ? 'bg-accent-rose/20 text-accent-rose'
-                            : 'bg-accent-indigo/20 text-accent-indigo'
+                            : 'bg-accent-rose/20 text-accent-rose'
                           : 'text-gray-400 hover:text-gray-200'
                       }`}
                     >
@@ -500,46 +499,7 @@ export default function Transactions({
                     />
                   </div>
 
-                  {/* Link to Asset Dropdown when type is investment */}
-                  {formData.type === 'investment' && (
-                    <div className="flex flex-col gap-1.5 col-span-2">
-                      <label className="text-xs font-semibold text-gray-400">Link to Asset Portfolio</label>
-                      <div className="relative">
-                        <select
-                          value={formData.asset_id}
-                          onChange={(e) => setFormData({ ...formData, asset_id: e.target.value })}
-                          className="w-full appearance-none bg-card/50 border border-border rounded-xl pl-3 pr-10 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent-indigo transition-colors"
-                        >
-                          <option value="" className="bg-[#161920] text-gray-400">-- Select Portfolio Asset (Optional) --</option>
-                          {investments.map((inv) => (
-                            <option key={inv.id} value={inv.id.toString()} className="bg-[#161920] text-gray-200">
-                              {inv.asset_name} ({inv.asset_type})
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3.5 top-3.5 pointer-events-none" />
-                      </div>
-                    </div>
-                  )}
 
-                  {/* Activity Type Dropdown when type is investment */}
-                  {formData.type === 'investment' && (
-                    <div className="flex flex-col gap-1.5 col-span-2">
-                      <label className="text-xs font-semibold text-gray-400">Activity Type</label>
-                      <div className="relative">
-                        <select
-                          value={formData.activity_type}
-                          onChange={(e) => setFormData({ ...formData, activity_type: e.target.value as any })}
-                          className="w-full appearance-none bg-card/50 border border-border rounded-xl pl-3 pr-10 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent-indigo transition-colors"
-                        >
-                          <option value="buy" className="bg-[#161920] text-gray-200">Buy (Inflow to Portfolio, capital spent)</option>
-                          <option value="sell" className="bg-[#161920] text-gray-200">Sell (Outflow from Portfolio, capital liquidated)</option>
-                          <option value="dividend" className="bg-[#161920] text-gray-200">Dividend (Payout from Asset, does not change valuation)</option>
-                        </select>
-                        <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3.5 top-3.5 pointer-events-none" />
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Note */}
@@ -558,16 +518,21 @@ export default function Transactions({
                 <div className="flex justify-end gap-3 mt-2">
                   <button
                     type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2.5 rounded-xl border border-border hover:bg-gray-800/40 text-gray-400 hover:text-gray-200 font-semibold text-sm transition-colors"
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      setEditingTransaction(null);
+                    }}
+                    disabled={isSubmitting}
+                    className="px-4 py-2.5 rounded-xl border border-border hover:bg-gray-800/40 text-gray-400 hover:text-gray-200 font-semibold text-sm transition-colors disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2.5 rounded-xl bg-accent-indigo text-white font-semibold text-sm shadow-glow-indigo"
+                    disabled={isSubmitting}
+                    className="px-5 py-2.5 rounded-xl bg-accent-indigo text-white font-semibold text-sm shadow-glow-indigo disabled:opacity-60"
                   >
-                    {editingTransaction ? 'Save Changes' : 'Record'}
+                    {isSubmitting ? 'Working...' : (editingTransaction ? 'Save Changes' : 'Record')}
                   </button>
                 </div>
               </form>

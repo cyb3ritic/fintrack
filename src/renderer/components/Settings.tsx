@@ -90,7 +90,7 @@ export default function Settings({ categories, addCategory, updateCategory, dele
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryForm, setCategoryForm] = useState({
     name: '',
-    type: 'expense' as 'income' | 'expense' | 'investment',
+    type: 'expense' as 'income' | 'expense',
     icon: 'Tag',
     color: '#6366f1',
   });
@@ -571,7 +571,7 @@ export default function Settings({ categories, addCategory, updateCategory, dele
               </div>
 
               {/* Grouped Category Columns */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Income Categories */}
                 <div className="p-5 rounded-2xl border border-border bg-card/15 flex flex-col gap-4">
                   <div className="border-b border-border pb-2.5 flex justify-between items-center">
@@ -618,42 +618,6 @@ export default function Settings({ categories, addCategory, updateCategory, dele
                   </div>
                   <div className="flex flex-col gap-2 max-h-[350px] overflow-y-auto pr-1">
                     {categories.filter(c => c.type === 'expense').map(cat => (
-                      <div key={cat.id} className="p-3 rounded-xl border border-border/40 bg-card/30 flex items-center justify-between hover:bg-card/50 transition-colors group">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-gray-900/40">
-                            {renderCategoryIcon(cat.icon, cat.color)}
-                          </div>
-                          <span className="text-sm font-medium text-gray-200 truncate max-w-[130px]" title={cat.name}>{cat.name}</span>
-                        </div>
-                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => handleOpenEditCategory(cat)}
-                            className="p-1 rounded text-gray-500 hover:text-accent-indigo hover:bg-gray-800/40 transition-colors"
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCategoryClick(cat)}
-                            className="p-1 rounded text-gray-500 hover:text-accent-rose hover:bg-gray-800/40 transition-colors"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Investment Categories */}
-                <div className="p-5 rounded-2xl border border-border bg-card/15 flex flex-col gap-4">
-                  <div className="border-b border-border pb-2.5 flex justify-between items-center">
-                    <span className="text-xs font-bold text-accent-indigo uppercase tracking-wider">Investment Categories</span>
-                    <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-accent-indigo/10 text-accent-indigo">
-                      {categories.filter(c => c.type === 'investment').length}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-2 max-h-[350px] overflow-y-auto pr-1">
-                    {categories.filter(c => c.type === 'investment').map(cat => (
                       <div key={cat.id} className="p-3 rounded-xl border border-border/40 bg-card/30 flex items-center justify-between hover:bg-card/50 transition-colors group">
                         <div className="flex items-center gap-3">
                           <div className="p-2 rounded-lg bg-gray-900/40">
@@ -731,7 +695,7 @@ export default function Settings({ categories, addCategory, updateCategory, dele
 
                 {/* Type */}
                 <div className="flex bg-card/60 rounded-xl border border-border p-1 w-full">
-                  {['income', 'expense', 'investment'].map((t) => (
+                  {['income', 'expense'].map((t) => (
                     <button
                       key={t}
                       type="button"
@@ -741,9 +705,7 @@ export default function Settings({ categories, addCategory, updateCategory, dele
                         categoryForm.type === t
                           ? t === 'income'
                             ? 'bg-accent-emerald/20 text-accent-emerald'
-                            : t === 'expense'
-                            ? 'bg-accent-rose/20 text-accent-rose'
-                            : 'bg-accent-indigo/20 text-accent-indigo'
+                            : 'bg-accent-rose/20 text-accent-rose'
                           : 'text-gray-400 hover:text-gray-200'
                       } disabled:opacity-60`}
                     >

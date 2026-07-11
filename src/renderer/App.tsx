@@ -2,7 +2,6 @@ import { useState } from 'react';
 import Sidebar, { TabId } from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Transactions from './components/Transactions';
-import Investments from './components/Investments';
 import Settings from './components/Settings';
 import Goals from './components/Goals';
 import { useDatabase } from './hooks/useDatabase';
@@ -14,7 +13,6 @@ export default function App() {
   
   const {
     transactions,
-    investments,
     categories,
     stats,
     loading,
@@ -23,9 +21,6 @@ export default function App() {
     addTransaction,
     updateTransaction,
     deleteTransaction,
-    addInvestment,
-    updateInvestment,
-    deleteInvestment,
     addCategory,
     updateCategory,
     deleteCategory,
@@ -64,7 +59,6 @@ export default function App() {
                 <Transactions
                   transactions={transactions}
                   categories={categories}
-                  investments={investments}
                   filters={filters}
                   setFilters={setFilters}
                   addTransaction={addTransaction}
@@ -72,20 +66,10 @@ export default function App() {
                   deleteTransaction={deleteTransaction}
                 />
               )}
-              
-              {activeTab === 'investments' && (
-                <Investments
-                  investments={investments}
-                  addInvestment={addInvestment}
-                  updateInvestment={updateInvestment}
-                  deleteInvestment={deleteInvestment}
-                />
-              )}
 
               {activeTab === 'goals' && (
                 <Goals
                   goals={goals}
-                  investments={investments}
                   addGoal={addGoal}
                   updateGoal={updateGoal}
                   deleteGoal={deleteGoal}

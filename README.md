@@ -1,14 +1,13 @@
 # FinTrack 📊
 
-FinTrack is a secure, local-first, offline-first desktop application designed for personal finance tracking, budgeting, and investment portfolio monitoring. Developed by **cyb3ritic**, it combines the security of fully offline SQLite database vaults with modern visual analytics, automated software updates via GitHub, and encrypted data backups.
+FinTrack is a secure, local-first, offline-first desktop application designed for personal finance tracking and budgeting. Developed by **cyb3ritic**, it combines the security of fully offline SQLite database vaults with modern visual analytics, automated software updates via GitHub, and encrypted data backups.
 
 ---
 
 ## ✨ Key Features
 
-- **📊 Comprehensive Financial Dashboard**: Visual analytics showing real-time cash flow, net worth progress, monthly trends, and asset allocation utilizing dynamic charts.
-- **💸 Ledger Transaction Tracking**: Track and categorize transactions across income, expenses, and investments with advanced filtering (by type, category, date).
-- **📈 Investment Portfolio Monitor**: Monitor stocks, crypto, gold, fixed deposits, and mutual fund holdings with live-updated valuation calculations.
+- **📊 Comprehensive Financial Dashboard**: Visual analytics showing real-time cash flow, monthly trends, and expense breakdowns utilizing dynamic charts.
+- **💸 Ledger Transaction Tracking**: Track and categorize transactions across income and expenses with advanced filtering (by type, category, date).
 - **🔒 AES-256-GCM Encrypted Backups**: Export your offline vault into a secure, password-encrypted archive (`.enc`) and restore it seamlessly at any time.
 - **🚀 GitHub Auto-Updates**: Integrated updater that checks for remote versions on GitHub, downloads releases in the background, and prompts for seamless, automated installs.
 - **🎨 Premium Dark Theme**: A responsive user interface featuring glassmorphic layout components, custom calendars, and clean visual indicators.

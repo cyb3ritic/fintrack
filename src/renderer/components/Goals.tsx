@@ -1,19 +1,18 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Target, Calendar, Plus, Edit2, Trash2, Link2, ChevronDown, CheckCircle2 } from 'lucide-react';
-import { Goal, Investment } from '../hooks/useDatabase';
+import { Target, Calendar, Plus, Edit2, Trash2, CheckCircle2 } from 'lucide-react';
+import { Goal } from '../hooks/useDatabase';
 import { useCurrency } from '../context/CurrencyContext';
 import { useToast } from './Toast';
 
 interface GoalsProps {
   goals: Goal[];
-  investments: Investment[];
   addGoal: (goal: Omit<Goal, 'id' | 'isCompleted'>) => Promise<any>;
   updateGoal: (id: number, goal: Omit<Goal, 'id' | 'isCompleted'>) => Promise<any>;
   deleteGoal: (id: number) => Promise<any>;
 }
 
-export default function Goals({ goals, investments, addGoal, updateGoal, deleteGoal }: GoalsProps) {
+export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsProps) {
   const { formatCurrency } = useCurrency();
   const { showToast } = useToast();
   
@@ -25,7 +24,6 @@ export default function Goals({ goals, investments, addGoal, updateGoal, deleteG
     target_amount: '',
     current_allocated: '',
     target_date: '',
-    linked_asset_id: ''
   });
 
   const handleEditClick = (goal: Goal) => {
@@ -35,7 +33,6 @@ export default function Goals({ goals, investments, addGoal, updateGoal, deleteG
       target_amount: goal.target_amount.toString(),
       current_allocated: goal.current_allocated.toString(),
       target_date: goal.target_date || '',
-      linked_asset_id: goal.linked_asset_id ? goal.linked_asset_id.toString() : ''
     });
     setIsModalOpen(true);
   };
@@ -47,7 +44,6 @@ export default function Goals({ goals, investments, addGoal, updateGoal, deleteG
       target_amount: '',
       current_allocated: '0',
       target_date: '',
-      linked_asset_id: ''
     });
     setIsModalOpen(true);
   };
@@ -76,9 +72,8 @@ export default function Goals({ goals, investments, addGoal, updateGoal, deleteG
     const payload = {
       title: formData.title,
       target_amount: targetAmt,
-      current_allocated: formData.linked_asset_id ? 0 : currAllocated, // Dynamic assets override this anyway
+      current_allocated: currAllocated,
       target_date: formData.target_date || null,
-      linked_asset_id: formData.linked_asset_id ? parseInt(formData.linked_asset_id, 10) : null
     };
 
     try {
@@ -133,8 +128,6 @@ export default function Goals({ goals, investments, addGoal, updateGoal, deleteG
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (percent / 100) * circumference;
 
-    const linkedAsset = investments.find((i) => i.id === goal.linked_asset_id);
-
     return (
       <motion.div
         layout
@@ -183,14 +176,6 @@ export default function Goals({ goals, investments, addGoal, updateGoal, deleteG
             </button>
           </div>
         </div>
-
-        {/* Dynamic linked asset name if present */}
-        {linkedAsset && (
-          <div className="flex items-center gap-1.5 bg-accent-indigo/10 border border-accent-indigo/25 text-accent-indigo px-2.5 py-1.5 rounded-lg text-[10px] font-bold w-fit">
-            <Link2 className="w-3.5 h-3.5" />
-            Live Sync: {linkedAsset.asset_name}
-          </div>
-        )}
 
         <div className="flex items-center justify-between gap-4 mt-1 border-t border-border/20 pt-3 select-text">
           <div className="flex flex-col">
@@ -257,7 +242,7 @@ export default function Goals({ goals, investments, addGoal, updateGoal, deleteG
       <div className="flex justify-between items-center select-none">
         <div>
           <h1 className="text-2xl font-bold text-gray-100 tracking-tight">Goals & Wishlist</h1>
-          <p className="text-sm text-gray-500 font-medium">Track your targets, milestones, and investments side-by-side.</p>
+          <p className="text-sm text-gray-500 font-medium">Track your targets and milestones side-by-side.</p>
         </div>
         <motion.button
           whileHover={{ scale: 1.02 }}
@@ -274,7 +259,7 @@ export default function Goals({ goals, investments, addGoal, updateGoal, deleteG
         <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-border rounded-2xl p-10 text-center select-none my-10">
           <Target className="w-12 h-12 text-gray-600 mb-3 animate-pulse" />
           <h3 className="font-bold text-gray-300 mb-1">No Targets Set Yet</h3>
-          <p className="text-xs text-gray-500 max-w-[280px]">Define your wealth milestones or dream items and allocate funds manually or linked to active investments.</p>
+          <p className="text-xs text-gray-500 max-w-[280px]">Define your wealth milestones or dream items and allocate funds manually.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-8">
@@ -336,41 +321,18 @@ export default function Goals({ goals, investments, addGoal, updateGoal, deleteG
                   />
                 </div>
 
-                {/* Link to Investment Asset */}
+                {/* Manually Allocated Capital */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-gray-400">Link to Investment Portfolio (Optional)</label>
-                  <div className="relative">
-                    <select
-                      value={formData.linked_asset_id}
-                      onChange={(e) => setFormData({ ...formData, linked_asset_id: e.target.value })}
-                      className="w-full appearance-none bg-card/50 border border-border rounded-xl pl-3 pr-10 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent-indigo transition-colors"
-                    >
-                      <option value="" className="bg-[#161920] text-gray-400">-- No Live Asset Link (Manual Allocation) --</option>
-                      {investments.map((inv) => (
-                        <option key={inv.id} value={inv.id.toString()} className="bg-[#161920] text-gray-200">
-                          {inv.asset_name} ({inv.asset_type})
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3.5 top-3.5 pointer-events-none" />
-                  </div>
-                  <span className="text-[10px] text-gray-500 font-medium">If linked, the allocation automatically tracks the current value of the asset portfolio.</span>
+                  <label className="text-xs font-semibold text-gray-400">Manually Allocated Capital (INR)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="₹ 0.00"
+                    value={formData.current_allocated}
+                    onChange={(e) => setFormData({ ...formData, current_allocated: e.target.value })}
+                    className="w-full bg-card/50 border border-border rounded-xl px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent-indigo transition-colors font-semibold"
+                  />
                 </div>
-
-                {/* Manual current allocation input if NO linked asset */}
-                {!formData.linked_asset_id && (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-semibold text-gray-400">Manually Allocated Capital (INR)</label>
-                    <input
-                      type="number"
-                      step="any"
-                      placeholder="₹ 0.00"
-                      value={formData.current_allocated}
-                      onChange={(e) => setFormData({ ...formData, current_allocated: e.target.value })}
-                      className="w-full bg-card/50 border border-border rounded-xl px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent-indigo transition-colors font-semibold"
-                    />
-                  </div>
-                )}
 
                 {/* Target Date */}
                 <div className="flex flex-col gap-1.5">

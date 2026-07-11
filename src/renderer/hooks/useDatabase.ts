@@ -1,26 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 // TypeScript Interfaces for DB entities
 export interface Transaction {
   id: number;
   date: string;
   amount: number;
-  type: 'income' | 'expense' | 'investment';
+  type: 'income' | 'expense';
   category: string;
   subcategory?: string;
   note?: string;
-  asset_id?: number | null;
-  activity_type?: 'buy' | 'sell' | 'dividend' | 'none';
   created_at: string;
-}
-
-export interface Investment {
-  id: number;
-  asset_name: string;
-  asset_type: 'Stocks' | 'Mutual Funds' | 'Fixed Deposits' | 'Crypto' | 'Gold';
-  invested_amount: number;
-  current_value: number;
-  last_updated: string;
 }
 
 export interface Goal {
@@ -29,27 +18,24 @@ export interface Goal {
   target_amount: number;
   current_allocated: number;
   target_date?: string | null;
-  linked_asset_id?: number | null;
   isCompleted: boolean;
 }
 
 export interface Category {
   id: number;
   name: string;
-  type: 'income' | 'expense' | 'investment';
+  type: 'income' | 'expense';
   icon: string;
   color: string;
 }
 
 export interface DashboardStats {
-  netWorth: number;
-  cash: number;
-  totalInvested: number;
-  currentInvestmentValue: number;
+  liquidBalance: number;
+  totalIncome: number;
+  totalExpense: number;
   categoryExpenses: { category: string; value: number }[];
-  monthlyTrends: { month: string; income: number; expense: number }[];
-  assetAllocation: { type: string; value: number }[];
-  netWorthTrends: { month: string; value: number }[];
+  monthlyTrends: { month: string; income: number; outflow: number }[];
+  liquidBalanceTrends: { month: string; value: number }[];
 }
 
 // Typing for the Electron contextBridge API
@@ -66,10 +52,6 @@ declare global {
       updateTransaction: (id: number, tx: Omit<Transaction, 'id' | 'created_at'>) => Promise<Transaction>;
       deleteTransaction: (id: number) => Promise<{ id: number }>;
       
-      getInvestments: () => Promise<Investment[]>;
-      addInvestment: (inv: Omit<Investment, 'id' | 'last_updated'>) => Promise<Investment>;
-      updateInvestment: (id: number, inv: Omit<Investment, 'id' | 'last_updated'>) => Promise<Investment>;
-      deleteInvestment: (id: number) => Promise<{ id: number }>;
       
       getCategories: () => Promise<Category[]>;
       addCategory: (cat: Omit<Category, 'id'>) => Promise<Category>;
@@ -98,7 +80,6 @@ declare global {
 
 export function useDatabase() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [investments, setInvestments] = useState<Investment[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -111,33 +92,85 @@ export function useDatabase() {
     category?: string;
   }>({});
 
+  // Use refs to avoid stale closures in mutation functions
+  const filtersRef = useRef(filters);
+  const rangeRef = useRef(range);
+  const fetchVersionRef = useRef(0);
+
+  // Keep refs in sync with state
+  filtersRef.current = filters;
+  rangeRef.current = range;
+
   const refreshData = useCallback(async () => {
+    const version = ++fetchVersionRef.current;
+
     try {
       setLoading(true);
-      const [txData, invData, catData, statsData, goalsData] = await Promise.all([
-        window.api.getTransactions(filters),
-        window.api.getInvestments(),
-        window.api.getCategories(),
-        window.api.getStats(range),
-        window.api.getGoals()
-      ]);
-      setTransactions(txData);
-      setInvestments(invData);
-      setCategories(catData);
-      setStats(statsData);
-      setGoals(goalsData);
-    } catch (err) {
-      console.error('Failed to load database content:', err);
+
+      // Fetch each dataset independently so one failure doesn't block all
+      let txData: Transaction[] | null = null;
+      let catData: Category[] | null = null;
+      let statsData: DashboardStats | null = null;
+      let goalsData: Goal[] | null = null;
+
+      try {
+        txData = await window.api.getTransactions(filtersRef.current);
+      } catch (err) {
+        console.error('Failed to fetch transactions:', err);
+      }
+
+      try {
+        catData = await window.api.getCategories();
+      } catch (err) {
+        console.error('Failed to fetch categories:', err);
+      }
+
+      try {
+        statsData = await window.api.getStats(rangeRef.current);
+      } catch (err) {
+        console.error('Failed to fetch stats:', err);
+      }
+
+      try {
+        goalsData = await window.api.getGoals();
+      } catch (err) {
+        console.error('Failed to fetch goals:', err);
+      }
+
+      // Only apply state if this is still the latest fetch (prevents stale overwrites)
+      if (version === fetchVersionRef.current) {
+        if (txData !== null) setTransactions(txData);
+        if (catData !== null) setCategories(catData);
+        if (statsData !== null) setStats(statsData);
+        if (goalsData !== null) setGoals(goalsData);
+      }
     } finally {
-      setLoading(false);
+      if (version === fetchVersionRef.current) {
+        setLoading(false);
+      }
     }
-  }, [filters, range]);
+  }, []);
 
   useEffect(() => {
     refreshData();
   }, [refreshData]);
 
-  // Transaction mutations
+  // Re-fetch when filters or range change
+  const prevFiltersRef = useRef(filters);
+  const prevRangeRef = useRef(range);
+
+  useEffect(() => {
+    const filtersChanged = JSON.stringify(prevFiltersRef.current) !== JSON.stringify(filters);
+    const rangeChanged = prevRangeRef.current !== range;
+
+    if (filtersChanged || rangeChanged) {
+      prevFiltersRef.current = filters;
+      prevRangeRef.current = range;
+      refreshData();
+    }
+  }, [filters, range, refreshData]);
+
+  // All mutations use refs to call the latest refreshData, avoiding stale closures
   const addTransaction = async (tx: Omit<Transaction, 'id' | 'created_at'>) => {
     const result = await window.api.addTransaction(tx);
     await refreshData();
@@ -152,25 +185,6 @@ export function useDatabase() {
 
   const deleteTransaction = async (id: number) => {
     const result = await window.api.deleteTransaction(id);
-    await refreshData();
-    return result;
-  };
-
-  // Investment mutations
-  const addInvestment = async (inv: Omit<Investment, 'id' | 'last_updated'>) => {
-    const result = await window.api.addInvestment(inv);
-    await refreshData();
-    return result;
-  };
-
-  const updateInvestment = async (id: number, inv: Omit<Investment, 'id' | 'last_updated'>) => {
-    const result = await window.api.updateInvestment(id, inv);
-    await refreshData();
-    return result;
-  };
-
-  const deleteInvestment = async (id: number) => {
-    const result = await window.api.deleteInvestment(id);
     await refreshData();
     return result;
   };
@@ -213,7 +227,6 @@ export function useDatabase() {
 
   return {
     transactions,
-    investments,
     categories,
     stats,
     goals,
@@ -224,9 +237,6 @@ export function useDatabase() {
     addTransaction,
     updateTransaction,
     deleteTransaction,
-    addInvestment,
-    updateInvestment,
-    deleteInvestment,
     addCategory,
     updateCategory,
     deleteCategory,

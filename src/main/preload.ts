@@ -7,12 +7,6 @@ contextBridge.exposeInMainWorld('api', {
   updateTransaction: (id: number, tx: any) => ipcRenderer.invoke('db:update-transaction', id, tx),
   deleteTransaction: (id: number) => ipcRenderer.invoke('db:delete-transaction', id),
 
-  // Investments
-  getInvestments: () => ipcRenderer.invoke('db:get-investments'),
-  addInvestment: (inv: any) => ipcRenderer.invoke('db:add-investment', inv),
-  updateInvestment: (id: number, inv: any) => ipcRenderer.invoke('db:update-investment', id, inv),
-  deleteInvestment: (id: number) => ipcRenderer.invoke('db:delete-investment', id),
-
   // Categories & Stats
   getCategories: () => ipcRenderer.invoke('db:get-categories'),
   addCategory: (cat: any) => ipcRenderer.invoke('db:add-category', cat),
