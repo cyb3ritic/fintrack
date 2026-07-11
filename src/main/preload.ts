@@ -14,6 +14,13 @@ contextBridge.exposeInMainWorld('api', {
   deleteCategory: (id: number) => ipcRenderer.invoke('db:delete-category', id),
   getStats: (range?: string) => ipcRenderer.invoke('db:get-stats', range),
 
+  // Budgets & Recurring Bills
+  getBudgets: (monthYear?: string) => ipcRenderer.invoke('db:get-budgets', monthYear),
+  setBudget: (categoryId: number, amount: number, monthYear?: string) => ipcRenderer.invoke('db:set-budget', categoryId, amount, monthYear),
+  getRecurringBills: () => ipcRenderer.invoke('db:get-recurring-bills'),
+  addRecurringBill: (bill: any) => ipcRenderer.invoke('db:add-recurring-bill', bill),
+  toggleBillPaidStatus: (id: number) => ipcRenderer.invoke('db:toggle-bill-paid-status', id),
+
   // Goals & Wishlist
   getGoals: () => ipcRenderer.invoke('db:get-goals'),
   addGoal: (goal: any) => ipcRenderer.invoke('db:add-goal', goal),

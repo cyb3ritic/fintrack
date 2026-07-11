@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, TrendingUp, AlertCircle, Eye, EyeOff, ArrowDownRight } from 'lucide-react';
+import { Wallet, TrendingUp, AlertCircle, Eye, EyeOff, ArrowDownRight, Sparkles } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import StatCard from './StatCard';
-import { DashboardStats } from '../hooks/useDatabase';
+import BudgetProgressCard from './BudgetProgressCard';
+import { Budget, DashboardStats, Transaction } from '../hooks/useDatabase';
 import { useCurrency } from '../context/CurrencyContext';
 
 interface DashboardProps {
   stats: DashboardStats | null;
+  transactions: Transaction[];
+  budgets: Budget[];
   isLoading: boolean;
   range: string;
   setRange: (range: string) => void;
@@ -34,7 +37,7 @@ const itemVariants = {
   }
 };
 
-export default function Dashboard({ stats, isLoading, range, setRange }: DashboardProps) {
+export default function Dashboard({ stats, transactions, budgets, isLoading, range, setRange }: DashboardProps) {
   const { formatCurrency, currency } = useCurrency();
 
   const [isChartMasked, setIsChartMasked] = useState<boolean>(() =>
@@ -49,11 +52,69 @@ export default function Dashboard({ stats, isLoading, range, setRange }: Dashboa
   const [isBalanceTrendMasked, setIsBalanceTrendMasked] = useState<boolean>(() =>
     sessionStorage.getItem('mask_dashboard_balance_trend') === null ? true : sessionStorage.getItem('mask_dashboard_balance_trend') === 'true'
   );
+  const [isBudgetOverviewMasked, setIsBudgetOverviewMasked] = useState<boolean>(() =>
+    sessionStorage.getItem('mask_dashboard_budget_overview') === null ? true : sessionStorage.getItem('mask_dashboard_budget_overview') === 'true'
+  );
+  const [isForecastMasked, setIsForecastMasked] = useState<boolean>(() =>
+    sessionStorage.getItem('mask_dashboard_forecast') === null ? true : sessionStorage.getItem('mask_dashboard_forecast') === 'true'
+  );
+  const [isSavingsMasked, setIsSavingsMasked] = useState<boolean>(() =>
+    sessionStorage.getItem('mask_dashboard_savings') === null ? true : sessionStorage.getItem('mask_dashboard_savings') === 'true'
+  );
 
   const toggleChartMask = () => setIsChartMasked((prev) => { const next = !prev; sessionStorage.setItem('mask_dashboard_chart', String(next)); return next; });
   const toggleExpensesMask = () => setIsExpensesMasked((prev) => { const next = !prev; sessionStorage.setItem('mask_dashboard_expenses', String(next)); return next; });
   const toggleCashFlowMask = () => setIsCashFlowMasked((prev) => { const next = !prev; sessionStorage.setItem('mask_dashboard_cashflow', String(next)); return next; });
   const toggleBalanceTrendMask = () => setIsBalanceTrendMasked((prev) => { const next = !prev; sessionStorage.setItem('mask_dashboard_balance_trend', String(next)); return next; });
+  const toggleBudgetOverviewMask = () => setIsBudgetOverviewMasked((prev) => { const next = !prev; sessionStorage.setItem('mask_dashboard_budget_overview', String(next)); return next; });
+  const toggleForecastMask = () => setIsForecastMasked((prev) => { const next = !prev; sessionStorage.setItem('mask_dashboard_forecast', String(next)); return next; });
+  const toggleSavingsMask = () => setIsSavingsMasked((prev) => { const next = !prev; sessionStorage.setItem('mask_dashboard_savings', String(next)); return next; });
+
+  const isInvestmentTransaction = (tx: Transaction) => {
+    const category = tx.category?.toLowerCase() || '';
+    const subcategory = tx.subcategory?.toLowerCase() || '';
+    const note = tx.note?.toLowerCase() || '';
+    return category.includes('investment') || subcategory.includes('investment') || note.includes('investment');
+  };
+
+  const currentDate = new Date();
+  const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+  const currentDay = currentDate.getDate();
+  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+
+  const currentMonthExpenses = useMemo(() => transactions.filter((tx) => tx.type === 'expense' && tx.date.startsWith(currentMonthKey) && !isInvestmentTransaction(tx)), [transactions, currentMonthKey]);
+  const currentMonthSpend = currentMonthExpenses.reduce((sum, tx) => sum + tx.amount, 0);
+  const dailyBurnRate = currentMonthSpend / Math.max(currentDay, 1);
+  const projectedSpending = dailyBurnRate * daysInMonth;
+  const budgetPool = budgets.reduce((sum, budget) => sum + (budget.budget_amount ?? 0), 0);
+  const projectedOverage = projectedSpending > budgetPool && budgetPool > 0 ? projectedSpending - budgetPool : 0;
+  const isForecastWarning = projectedOverage > 0;
+
+  const savingsRateSeries = useMemo(() => {
+    const series: { month: string; savingsRate: number }[] = [];
+
+    for (let index = 5; index >= 0; index -= 1) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - index, 1);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthIncome = transactions
+        .filter((tx) => tx.type === 'income' && tx.date.startsWith(monthKey))
+        .reduce((sum, tx) => sum + tx.amount, 0);
+      const monthExpenses = transactions
+        .filter((tx) => tx.type === 'expense' && tx.date.startsWith(monthKey) && !isInvestmentTransaction(tx))
+        .reduce((sum, tx) => sum + tx.amount, 0);
+      const monthInvestments = transactions
+        .filter((tx) => tx.type === 'expense' && tx.date.startsWith(monthKey) && isInvestmentTransaction(tx))
+        .reduce((sum, tx) => sum + tx.amount, 0);
+
+      const savingsRate = monthIncome > 0 ? ((monthIncome - (monthExpenses + monthInvestments)) / monthIncome) * 100 : 0;
+      series.push({
+        month: date.toLocaleDateString('en-US', { month: 'short' }),
+        savingsRate: Number(savingsRate.toFixed(1)),
+      });
+    }
+
+    return series;
+  }, [transactions, currentDate]);
 
   const getSymbol = () => {
     switch (currency) {
@@ -154,6 +215,145 @@ export default function Dashboard({ stats, isLoading, range, setRange }: Dashboa
           isLoading={isLoading}
           subtitle="Spending"
         />
+      </motion.div>
+
+      {/* Budget Overview */}
+      <motion.div variants={itemVariants} className="grid grid-cols-1 gap-5">
+        <div className="rounded-2xl border border-border bg-card/25 p-5 backdrop-blur-md">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-gray-200">Budget Overview</h3>
+              <p className="text-xs text-gray-500">Current month spending against your set monthly limits.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => toggleBudgetOverviewMask()}
+                className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-800/40 hover:text-white"
+                title={isBudgetOverviewMasked ? 'Reveal values' : 'Hide values'}
+              >
+                {isBudgetOverviewMasked ? <EyeOff className="h-3.5 w-3.5 text-accent-rose" /> : <Eye className="h-3.5 w-3.5 text-accent-emerald" />}
+              </button>
+              <div className="rounded-full border border-accent-indigo/30 bg-accent-indigo/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-accent-indigo">
+                Live
+              </div>
+            </div>
+          </div>
+
+          <div className={`transition-all duration-300 ${isBudgetOverviewMasked ? 'blur-md select-none' : 'blur-none'}`}>
+            {isLoading ? (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="h-28 animate-pulse rounded-2xl bg-gray-900/50" />
+                ))}
+              </div>
+            ) : budgets.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-gray-500">
+                No budgets set for this month yet. Open the budget manager to start tracking your spending limits.
+              </div>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {budgets.map((budget) => (
+                  <BudgetProgressCard key={budget.category_id} budget={budget} formatCurrency={formatCurrency} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Forecast & Savings Analytics */}
+      <motion.div variants={itemVariants} className="grid grid-cols-1 xl:grid-cols-[1.05fr_0.95fr] gap-5">
+        <div className="rounded-2xl border border-border bg-card/25 p-5 backdrop-blur-md">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-gray-200">Spending Forecast</h3>
+              <p className="text-xs text-gray-500">Linear projection for this month based on your daily burn rate.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => toggleForecastMask()}
+                className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-800/40 hover:text-white"
+                title={isForecastMasked ? 'Reveal values' : 'Hide values'}
+              >
+                {isForecastMasked ? <EyeOff className="h-3.5 w-3.5 text-accent-rose" /> : <Eye className="h-3.5 w-3.5 text-accent-emerald" />}
+              </button>
+              <div className="rounded-full border border-accent-amber-400/30 bg-amber-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-400">
+                <Sparkles className="mr-1 inline h-3 w-3" />
+                Predictive
+              </div>
+            </div>
+          </div>
+
+          <div className={`rounded-2xl border border-border/70 bg-background/30 p-4 transition-all duration-300 ${isForecastMasked ? 'blur-md select-none' : 'blur-none'}`}>
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.25em] text-gray-500">Projected End-of-Month Spend</p>
+                <p className="mt-2 text-3xl font-extrabold text-white">{formatCurrency(projectedSpending)}</p>
+              </div>
+              <div className="rounded-xl border border-border/70 bg-card/40 px-3 py-2 text-right">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500">Current month spend</p>
+                <p className="mt-1 text-sm font-semibold text-gray-300">{formatCurrency(currentMonthSpend)}</p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-gray-400">
+              <span className="rounded-full bg-accent-indigo/10 px-2.5 py-1 text-[11px] font-semibold text-accent-indigo">Daily burn rate: {formatCurrency(dailyBurnRate)}</span>
+              <span className="rounded-full bg-gray-800/70 px-2.5 py-1 text-[11px] font-semibold">{currentDay}/{daysInMonth} days elapsed</span>
+            </div>
+
+            {isForecastWarning && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-semibold text-rose-300 shadow-[0_0_30px_rgba(239,68,68,0.12)]"
+              >
+                Warning: Projected to exceed total monthly budget by {formatCurrency(projectedOverage)}
+              </motion.div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card/25 p-5 backdrop-blur-md">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-gray-200">Savings Rate Tracker</h3>
+              <p className="text-xs text-gray-500">A rolling view of how much of your income you’re keeping each month.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => toggleSavingsMask()}
+                className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-800/40 hover:text-white"
+                title={isSavingsMasked ? 'Reveal values' : 'Hide values'}
+              >
+                {isSavingsMasked ? <EyeOff className="h-3.5 w-3.5 text-accent-rose" /> : <Eye className="h-3.5 w-3.5 text-accent-emerald" />}
+              </button>
+              <div className="rounded-full border border-accent-emerald/30 bg-accent-emerald/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-accent-emerald">
+                6-Month Trend
+              </div>
+            </div>
+          </div>
+
+          <div className={`h-56 w-full transition-all duration-300 ${isSavingsMasked ? 'blur-md select-none' : 'blur-none'}`}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={savingsRateSeries} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="savingsGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1b202c" />
+                <XAxis dataKey="month" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#161920', border: '1px solid #222733', borderRadius: '0.75rem' }}
+                  formatter={(value: number) => [`${value.toFixed(1)}%`, 'Savings Rate']}
+                />
+                <Area type="monotone" dataKey="savingsRate" stroke="#10b981" strokeWidth={2.2} fillOpacity={1} fill="url(#savingsGradient)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </motion.div>
 
       {/* Charts Grid */}

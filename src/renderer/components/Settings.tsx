@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { useToast } from './Toast';
 import { useCurrency, CurrencyCode } from '../context/CurrencyContext';
-import { Category } from '../hooks/useDatabase';
+import { Budget, Category } from '../hooks/useDatabase';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface SettingsProps {
@@ -40,6 +40,10 @@ interface SettingsProps {
   addCategory: (cat: Omit<Category, 'id'>) => Promise<Category>;
   updateCategory: (id: number, cat: Omit<Category, 'id'>) => Promise<Category>;
   deleteCategory: (id: number) => Promise<{ id: number }>;
+  budgets: Budget[];
+  setBudget: (categoryId: number, amount: number, monthYear?: string) => Promise<any>;
+  budgetMonthYear: string;
+  setBudgetMonthYear: (monthYear: string) => void;
 }
 
 const COLOR_OPTIONS = [
@@ -60,11 +64,11 @@ const ICON_OPTIONS = [
   'Lock', 'Coins', 'CircleDot', 'FolderOpen'
 ];
 
-export default function Settings({ categories, addCategory, updateCategory, deleteCategory }: SettingsProps) {
+export default function Settings({ categories, addCategory, updateCategory, deleteCategory, budgets, setBudget, budgetMonthYear, setBudgetMonthYear }: SettingsProps) {
   const { showToast } = useToast();
   const { currency, setCurrency } = useCurrency();
 
-  const [activeSubTab, setActiveSubTab] = useState<'preferences' | 'categories'>('preferences');
+  const [activeSubTab, setActiveSubTab] = useState<'preferences' | 'categories' | 'budgets'>('preferences');
 
   // Backup states
   const [backupPassword, setBackupPassword] = useState('');
@@ -94,6 +98,9 @@ export default function Settings({ categories, addCategory, updateCategory, dele
     icon: 'Tag',
     color: '#6366f1',
   });
+
+  const [budgetDrafts, setBudgetDrafts] = useState<Record<number, string>>({});
+  const [isSavingBudgets, setIsSavingBudgets] = useState(false);
 
   useEffect(() => {
     // Listeners
@@ -331,6 +338,38 @@ export default function Settings({ categories, addCategory, updateCategory, dele
     }
   };
 
+  const handleBudgetSave = async (categoryId: number) => {
+    const rawValue = budgetDrafts[categoryId];
+    const amount = Number(rawValue);
+
+    if (!Number.isFinite(amount) || amount < 0) {
+      showToast('Budget amounts must be zero or greater.', 'error');
+      return;
+    }
+
+    try {
+      setIsSavingBudgets(true);
+      await setBudget(categoryId, amount, budgetMonthYear);
+      showToast('Budget updated successfully.', 'success');
+    } catch (err: any) {
+      showToast(`Budget update failed: ${err.message}`, 'error');
+    } finally {
+      setIsSavingBudgets(false);
+    }
+  };
+
+  const handleBudgetChange = (categoryId: number, value: string) => {
+    setBudgetDrafts((prev) => ({ ...prev, [categoryId]: value }));
+  };
+
+  useEffect(() => {
+    const nextDrafts: Record<number, string> = {};
+    budgets.forEach((budget) => {
+      nextDrafts[budget.category_id] = String(budget.budget_amount ?? '');
+    });
+    setBudgetDrafts(nextDrafts);
+  }, [budgets]);
+
   // Helper to resolve icon by string representation
   const renderCategoryIcon = (iconName: string, color: string) => {
     const iconComponents: Record<string, any> = {
@@ -373,6 +412,17 @@ export default function Settings({ categories, addCategory, updateCategory, dele
         >
           <Tag className="w-4 h-4" />
           <span>Category Manager</span>
+        </button>
+        <button
+          onClick={() => setActiveSubTab('budgets')}
+          className={`pb-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
+            activeSubTab === 'budgets'
+              ? 'border-accent-indigo text-white'
+              : 'border-transparent text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          <Coins className="w-4 h-4" />
+          <span>Monthly Budgets</span>
         </button>
       </div>
 
@@ -543,6 +593,79 @@ export default function Settings({ categories, addCategory, updateCategory, dele
                       </button>
                     )}
                   </div>
+                </div>
+              </div>
+            </motion.div>
+          ) : activeSubTab === 'budgets' ? (
+            <motion.div
+              key="budgets"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.15 }}
+              className="max-w-5xl"
+            >
+              <div className="p-6 rounded-2xl border border-border bg-card/25 backdrop-blur-md flex flex-col gap-5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-200">Monthly Budget Manager</h3>
+                    <p className="text-xs text-gray-500">Set spending caps for each expense category for the selected month.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-semibold text-gray-500">Month</label>
+                    <input
+                      type="month"
+                      value={budgetMonthYear}
+                      onChange={(e) => setBudgetMonthYear(e.target.value)}
+                      className="rounded-xl border border-border bg-background/70 px-3 py-2 text-sm text-gray-100 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-3">
+                  {categories.filter((category) => category.type === 'expense').map((category) => {
+                    const budget = budgets.find((item) => item.category_id === category.id);
+                    const inputValue = budgetDrafts[category.id] ?? '';
+                    const isActive = budget?.budget_amount != null && budget.budget_amount > 0;
+
+                    return (
+                      <div key={category.id} className="rounded-2xl border border-border/70 bg-background/30 p-4">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="rounded-xl p-2" style={{ backgroundColor: `${category.color}20`, color: category.color }}>
+                              {renderCategoryIcon(category.icon, category.color)}
+                            </div>
+                            <div>
+                              <div className="text-sm font-semibold text-gray-100">{category.name}</div>
+                              <div className="text-xs text-gray-500">{isActive ? 'Budget active' : 'No monthly budget'}</div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <div className="flex items-center gap-2 rounded-xl border border-border bg-background/60 px-3 py-2">
+                              <span className="text-xs font-semibold text-gray-500">Limit</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={inputValue}
+                                onChange={(e) => handleBudgetChange(category.id, e.target.value)}
+                                placeholder="0"
+                                className="w-28 bg-transparent text-sm font-semibold text-gray-100 outline-none"
+                              />
+                            </div>
+                            <button
+                              onClick={() => handleBudgetSave(category.id)}
+                              disabled={isSavingBudgets}
+                              className="rounded-xl bg-accent-indigo/15 px-3 py-2 text-sm font-semibold text-accent-indigo transition hover:bg-accent-indigo/25 disabled:opacity-60"
+                            >
+                              {isSavingBudgets ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </motion.div>

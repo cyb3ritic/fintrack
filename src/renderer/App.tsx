@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard';
 import Transactions from './components/Transactions';
 import Settings from './components/Settings';
 import Goals from './components/Goals';
+import BillCalendar from './components/BillCalendar';
 import { useDatabase } from './hooks/useDatabase';
 import { ToastProvider } from './components/Toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -15,6 +16,8 @@ export default function App() {
     transactions,
     categories,
     stats,
+    budgets,
+    recurringBills,
     loading,
     filters,
     setFilters,
@@ -24,6 +27,11 @@ export default function App() {
     addCategory,
     updateCategory,
     deleteCategory,
+    setBudget,
+    addRecurringBill,
+    toggleBillPaidStatus,
+    budgetMonthYear,
+    setBudgetMonthYear,
     addGoal,
     updateGoal,
     deleteGoal,
@@ -52,7 +60,7 @@ export default function App() {
               className="w-full h-full flex-grow overflow-hidden"
             >
               {activeTab === 'dashboard' && (
-                <Dashboard stats={stats} isLoading={loading} range={range} setRange={setRange} />
+                <Dashboard stats={stats} transactions={transactions} budgets={budgets} isLoading={loading} range={range} setRange={setRange} />
               )}
               
               {activeTab === 'transactions' && (
@@ -64,6 +72,14 @@ export default function App() {
                   addTransaction={addTransaction}
                   updateTransaction={updateTransaction}
                   deleteTransaction={deleteTransaction}
+                />
+              )}
+
+              {activeTab === 'calendar' && (
+                <BillCalendar
+                  recurringBills={recurringBills}
+                  addRecurringBill={addRecurringBill}
+                  toggleBillPaidStatus={toggleBillPaidStatus}
                 />
               )}
 
@@ -82,6 +98,10 @@ export default function App() {
                   addCategory={addCategory}
                   updateCategory={updateCategory}
                   deleteCategory={deleteCategory}
+                  budgets={budgets}
+                  setBudget={setBudget}
+                  budgetMonthYear={budgetMonthYear}
+                  setBudgetMonthYear={setBudgetMonthYear}
                 />
               )}
             </motion.div>

@@ -56,7 +56,32 @@ export function initDatabase() {
     )
   `);
 
-  // 3. Financial Goals Table (cleansed: no linked_asset_id)
+  // 3. Budgeting & Recurring Bill Tables
+  const schemaTransaction = db.transaction(() => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS budgets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
+        amount REAL NOT NULL,
+        month_year TEXT NOT NULL,
+        UNIQUE(category_id, month_year)
+      )
+    `);
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS recurring_bills (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        amount REAL NOT NULL,
+        due_date TEXT NOT NULL,
+        frequency TEXT CHECK(frequency IN ('monthly', 'yearly', 'weekly')) DEFAULT 'monthly',
+        is_paid INTEGER DEFAULT 0
+      )
+    `);
+  });
+  schemaTransaction();
+
+  // 4. Financial Goals Table (cleansed: no linked_asset_id)
   db.exec(`
     CREATE TABLE IF NOT EXISTS financial_goals (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -281,6 +306,126 @@ export function deleteCategory(id: number) {
 }
 
 // ----------------------------------------------------
+// BUDGETS CRUD
+// ----------------------------------------------------
+
+export function getBudgets(monthYear?: string) {
+  const targetMonth = monthYear || new Date().toISOString().slice(0, 7);
+
+  return db.prepare(`
+    SELECT
+      c.id AS category_id,
+      c.name AS category_name,
+      c.type AS category_type,
+      c.icon,
+      c.color,
+      b.id AS budget_id,
+      b.amount AS budget_amount,
+      b.month_year,
+      COALESCE(actual.actual_amount, 0) AS actual_amount,
+      CASE
+        WHEN b.amount IS NULL THEN 0
+        ELSE b.amount - COALESCE(actual.actual_amount, 0)
+      END AS remaining_amount,
+      CASE
+        WHEN b.amount IS NULL THEN 0
+        ELSE CASE WHEN COALESCE(actual.actual_amount, 0) > b.amount THEN 1 ELSE 0 END
+      END AS is_over_budget
+    FROM categories c
+    LEFT JOIN budgets b
+      ON b.category_id = c.id AND b.month_year = ?
+    LEFT JOIN (
+      SELECT category, SUM(amount) AS actual_amount
+      FROM transactions
+      WHERE type = 'expense' AND substr(date, 1, 7) = ?
+      GROUP BY category
+    ) actual ON actual.category = c.name
+    WHERE c.type = 'expense'
+    ORDER BY c.name ASC
+  `).all(targetMonth, targetMonth) as Array<{
+    category_id: number;
+    category_name: string;
+    category_type: string;
+    icon: string;
+    color: string;
+    budget_id: number | null;
+    budget_amount: number | null;
+    month_year: string;
+    actual_amount: number;
+    remaining_amount: number;
+    is_over_budget: number;
+  }>;
+}
+
+export function setBudget(categoryId: number, amount: number, monthYear?: string) {
+  const targetMonth = monthYear || new Date().toISOString().slice(0, 7);
+
+  const execute = db.transaction(() => {
+    const existing = db.prepare('SELECT id FROM budgets WHERE category_id = ? AND month_year = ?').get(categoryId, targetMonth) as { id: number } | undefined;
+
+    if (existing) {
+      db.prepare('UPDATE budgets SET amount = ? WHERE id = ?').run(amount, existing.id);
+    } else {
+      db.prepare('INSERT INTO budgets (category_id, amount, month_year) VALUES (?, ?, ?)').run(categoryId, amount, targetMonth);
+    }
+
+    return db.prepare('SELECT * FROM budgets WHERE category_id = ? AND month_year = ?').get(categoryId, targetMonth) as { id: number; category_id: number; amount: number; month_year: string };
+  });
+
+  return execute();
+}
+
+// ----------------------------------------------------
+// RECURRING BILLS CRUD
+// ----------------------------------------------------
+
+export function getRecurringBills() {
+  return db.prepare('SELECT * FROM recurring_bills ORDER BY due_date ASC, id ASC').all() as Array<{
+    id: number;
+    title: string;
+    amount: number;
+    due_date: string;
+    frequency: string;
+    is_paid: number;
+  }>;
+}
+
+export function addRecurringBill(bill: {
+  title: string;
+  amount: number;
+  due_date: string;
+  frequency?: 'monthly' | 'yearly' | 'weekly';
+  is_paid?: boolean;
+}) {
+  const stmt = db.prepare(`
+    INSERT INTO recurring_bills (title, amount, due_date, frequency, is_paid)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  const result = stmt.run(
+    bill.title,
+    bill.amount,
+    bill.due_date,
+    bill.frequency || 'monthly',
+    bill.is_paid ? 1 : 0
+  );
+
+  return { id: Number(result.lastInsertRowid), ...bill, is_paid: Boolean(bill.is_paid) };
+}
+
+export function toggleBillPaidStatus(id: number) {
+  const existing = db.prepare('SELECT * FROM recurring_bills WHERE id = ?').get(id) as { id: number; is_paid: number } | undefined;
+
+  if (!existing) {
+    return null;
+  }
+
+  const nextStatus = existing.is_paid === 1 ? 0 : 1;
+  db.prepare('UPDATE recurring_bills SET is_paid = ? WHERE id = ?').run(nextStatus, id);
+
+  return { id, is_paid: nextStatus === 1 };
+}
+
+// ----------------------------------------------------
 // FINANCIAL GOALS CRUD (manual allocation only)
 // ----------------------------------------------------
 
@@ -376,6 +521,8 @@ export function getRangeSpecs(range: string = '6M'): {
 }
 
 export function getStats(range = '6M') {
+  const currentMonthYear = new Date().toISOString().slice(0, 7);
+
   // Liquid Balance = Total Income - Total Expenses
   const cashFlow = db.prepare(`
     SELECT
@@ -452,13 +599,54 @@ export function getStats(range = '6M') {
     }
   }
 
+  const budgetSummary = db.prepare(`
+    SELECT
+      c.id AS category_id,
+      c.name AS category_name,
+      c.type AS category_type,
+      c.icon,
+      c.color,
+      b.amount AS budget_amount,
+      COALESCE(actual.actual_amount, 0) AS actual_amount,
+      CASE
+        WHEN b.amount IS NULL THEN NULL
+        ELSE b.amount - COALESCE(actual.actual_amount, 0)
+      END AS remaining_amount,
+      CASE
+        WHEN b.amount IS NULL THEN 0
+        ELSE CASE WHEN COALESCE(actual.actual_amount, 0) > b.amount THEN 1 ELSE 0 END
+      END AS is_over_budget
+    FROM categories c
+    LEFT JOIN budgets b
+      ON b.category_id = c.id AND b.month_year = ?
+    LEFT JOIN (
+      SELECT category, SUM(amount) AS actual_amount
+      FROM transactions
+      WHERE type = 'expense' AND substr(date, 1, 7) = ?
+      GROUP BY category
+    ) actual ON actual.category = c.name
+    WHERE c.type = 'expense'
+    ORDER BY c.name ASC
+  `).all(currentMonthYear, currentMonthYear) as Array<{
+    category_id: number;
+    category_name: string;
+    category_type: string;
+    icon: string;
+    color: string;
+    budget_amount: number | null;
+    actual_amount: number;
+    remaining_amount: number | null;
+    is_over_budget: number;
+  }>;
+
   return {
     liquidBalance,
     totalIncome: income,
     totalExpense: expense,
     categoryExpenses,
     monthlyTrends,
-    liquidBalanceTrends: getHistoricLiquidBalance(range)
+    liquidBalanceTrends: getHistoricLiquidBalance(range),
+    budgetSummary
   };
 }
 

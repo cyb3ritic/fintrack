@@ -127,6 +127,26 @@ ipcMain.handle('db:get-stats', async (_, range) => {
   return db.getStats(range);
 });
 
+ipcMain.handle('db:get-budgets', async (_, monthYear) => {
+  return db.getBudgets(monthYear);
+});
+
+ipcMain.handle('db:set-budget', async (_, categoryId, amount, monthYear) => {
+  return db.setBudget(Number(categoryId), Number(amount), monthYear);
+});
+
+ipcMain.handle('db:get-recurring-bills', async () => {
+  return db.getRecurringBills();
+});
+
+ipcMain.handle('db:add-recurring-bill', async (_, bill) => {
+  return db.addRecurringBill(bill);
+});
+
+ipcMain.handle('db:toggle-bill-paid-status', async (_, id) => {
+  return db.toggleBillPaidStatus(Number(id));
+});
+
 ipcMain.handle('db:get-goals', async () => {
   return db.getGoals();
 });

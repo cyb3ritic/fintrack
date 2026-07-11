@@ -1,7 +1,8 @@
-import { LayoutDashboard, Receipt, Settings, TrendingUp, Target } from 'lucide-react';
+import { CalendarDays, LayoutDashboard, Receipt, Settings, TrendingUp, Target } from 'lucide-react';
 import { motion } from 'framer-motion';
+import packageJson from '../../../package.json';
 
-export type TabId = 'dashboard' | 'transactions' | 'goals' | 'settings';
+export type TabId = 'dashboard' | 'transactions' | 'calendar' | 'goals' | 'settings';
 
 interface SidebarProps {
   activeTab: TabId;
@@ -9,9 +10,11 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
+  const appVersion = packageJson.version ?? '1.0.0';
   const menuItems = [
     { id: 'dashboard' as TabId, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'transactions' as TabId, label: 'Transactions', icon: Receipt },
+    { id: 'calendar' as TabId, label: 'Bill Calendar', icon: CalendarDays },
     { id: 'goals' as TabId, label: 'Goals & Wishlist', icon: Target },
     { id: 'settings' as TabId, label: 'Settings', icon: Settings },
   ];
@@ -67,7 +70,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
 
       {/* Footer Meta Details */}
       <div className="px-2 text-[11px] text-gray-600 flex flex-col gap-1">
-        <p className="font-medium">100% Offline Vault</p>
+        <p className="font-medium">v{appVersion}</p>
         <p>© 2026 AntiGravity Lab</p>
       </div>
     </aside>
