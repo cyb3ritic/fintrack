@@ -1,6 +1,6 @@
 {
   "name": "fintrack",
-  "version": "1.0.1",
+  "version": "2.0.1",
   "description": "Secure, local-first Desktop Expense Tracker",
   "author": "cyb3ritic",
   "repository": {
@@ -63,13 +63,20 @@
     ],
     "win": {
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": "always",
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "FinTrack",
       "uninstallDisplayName": "FinTrack",

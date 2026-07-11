@@ -154,8 +154,8 @@ export default function Settings({ categories, addCategory, updateCategory, dele
     }
   };
 
-  const handleInstallUpdate = async () => {
-    await window.api.quitAndInstall();
+  const handleInstallUpdate = () => {
+    window.api.quitAndInstall();
   };
 
   const handleStartDownload = async () => {

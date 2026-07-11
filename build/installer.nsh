@@ -23,10 +23,40 @@
 
 !macro customUnInstall
   ${ifNot} ${Silent}
-    MessageBox MB_YESNO|MB_ICONQUESTION "Do you want to delete all vault transactions, settings, and database files (clean uninstall)?$\r$\n$\r$\nClick YES to permanently delete your offline data.$\r$\nClick NO to keep your vault database files for future reinstalls." IDNO keepData
+
+    ; ── Three-way uninstall prompt ──────────────────────────────────────────
+    ; YES    → Deep Uninstall   : remove app + wipe all data/db files
+    ; NO     → Normal Uninstall : remove app, keep all data for future reinstall
+    ; CANCEL → Abort            : do nothing, exit the uninstaller
+    ; ─────────────────────────────────────────────────────────────────────────
+    MessageBox MB_YESNOCANCEL|MB_ICONQUESTION \
+      "How would you like to uninstall FinTrack?$\r$\n$\r$\n\
+[YES]    Deep Uninstall$\r$\n\
+         Removes the app AND permanently deletes all your$\r$\n\
+         transactions, vault data, and settings.$\r$\n\
+         This action cannot be undone.$\r$\n$\r$\n\
+[NO]     Normal Uninstall$\r$\n\
+         Removes the app only. Your database, transactions$\r$\n\
+         and settings are preserved for future reinstalls.$\r$\n$\r$\n\
+[CANCEL] Cancel$\r$\n\
+         Abort the uninstallation and keep everything." \
+      IDYES deepUninstall IDNO keepData
+
+    ; ── CANCEL branch: user chose to abort ───────────────────────────────────
+    Abort
+
+    ; ── YES branch: deep / clean uninstall ───────────────────────────────────
+    deepUninstall:
       RMDir /r "$APPDATA\fintrack"
       RMDir /r "$APPDATA\FinTrack"
-      DetailPrint "Clean uninstall: Database and vault directories deleted."
+      DetailPrint "Deep uninstall complete: all data and vault files removed."
+      Goto uninstallDone
+
+    ; ── NO branch: normal uninstall (data kept) ──────────────────────────────
     keepData:
+      DetailPrint "Normal uninstall complete: app removed, data preserved."
+
+    uninstallDone:
+
   ${endif}
 !macroend

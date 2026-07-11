@@ -111,7 +111,7 @@ declare global {
 
       checkForUpdates: () => Promise<{ success: boolean; error?: string }>;
       downloadUpdate: () => Promise<{ success: boolean; error?: string }>;
-      quitAndInstall: () => Promise<void>;
+      quitAndInstall: () => void;
       onUpdateStatus: (callback: (status: string) => void) => () => void;
       onUpdateAvailable: (callback: (available: boolean, version?: string) => void) => () => void;
       onUpdateDownloaded: (callback: (ready: boolean) => void) => () => void;

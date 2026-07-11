@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('api', {
   // Software Updates
   checkForUpdates: () => ipcRenderer.invoke('sys:check-for-updates'),
   downloadUpdate: () => ipcRenderer.invoke('sys:download-update'),
-  quitAndInstall: () => ipcRenderer.invoke('sys:quit-and-install'),
+  quitAndInstall: () => ipcRenderer.send('sys:quit-and-install'),
   onUpdateStatus: (callback: (status: string) => void) => {
     const subscription = (_event: any, status: string) => callback(status);
     ipcRenderer.on('update:status', subscription);

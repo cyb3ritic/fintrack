@@ -71,7 +71,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
       {/* Footer Meta Details */}
       <div className="px-2 text-[11px] text-gray-600 flex flex-col gap-1">
         <p className="font-medium">v{appVersion}</p>
-        <p>© 2026 AntiGravity Lab</p>
+        <p>© 2026 cyb3ritic@gmail.com</p>
       </div>
     </aside>
   );

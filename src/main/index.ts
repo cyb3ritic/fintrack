@@ -344,7 +344,8 @@ ipcMain.handle('sys:download-update', async () => {
   }
 });
 
-ipcMain.handle('sys:quit-and-install', async () => {
-  // quit and install silently (first argument true), and restart after install (second argument true)
+ipcMain.on('sys:quit-and-install', () => {
+  // isSilent: true  → suppress the NSIS progress/finish UI during update install
+  // isForceRunAfter: true → relaunch the app immediately after the update is applied
   autoUpdater.quitAndInstall(true, true);
 });
