@@ -30,3 +30,6 @@ Thumbs.db
 
 # environment file
 .env
+
+#others
+upgrade_plans.md

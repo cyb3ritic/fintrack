@@ -58,13 +58,14 @@ export default function Transactions({
   });
 
   const [isAmountMasked, setIsAmountMasked] = useState<boolean>(() => {
-    return localStorage.getItem('mask_ledger_amounts') === 'true';
+    const stored = sessionStorage.getItem('mask_ledger_amounts');
+    return stored === null ? true : stored === 'true';
   });
 
   const toggleAmountMask = () => {
     setIsAmountMasked((prev) => {
       const next = !prev;
-      localStorage.setItem('mask_ledger_amounts', String(next));
+      sessionStorage.setItem('mask_ledger_amounts', String(next));
       return next;
     });
   };

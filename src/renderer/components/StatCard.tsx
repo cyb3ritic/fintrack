@@ -59,14 +59,15 @@ export function AnimatedNumber({ value }: { value: number }) {
 export default function StatCard({ title, value, icon: Icon, colorClass, isLoading, subtitle }: StatCardProps) {
   const [isMasked, setIsMasked] = useState<boolean>(() => {
     const key = `mask_stat_card_${title.toLowerCase().replace(/\s+/g, '_')}`;
-    return localStorage.getItem(key) === 'true';
+    const stored = sessionStorage.getItem(key);
+    return stored === null ? true : stored === 'true';
   });
 
   const toggleMask = () => {
     setIsMasked((prev) => {
       const next = !prev;
       const key = `mask_stat_card_${title.toLowerCase().replace(/\s+/g, '_')}`;
-      localStorage.setItem(key, String(next));
+      sessionStorage.setItem(key, String(next));
       return next;
     });
   };

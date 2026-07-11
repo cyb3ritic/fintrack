@@ -37,27 +37,23 @@ const itemVariants = {
 export default function Dashboard({ stats, isLoading, range, setRange }: DashboardProps) {
   const { formatCurrency, currency } = useCurrency();
 
-  const [isChartMasked, setIsChartMasked] = useState<boolean>(() => {
-    return localStorage.getItem('mask_dashboard_chart') === 'true';
-  });
-  const [isExpensesMasked, setIsExpensesMasked] = useState<boolean>(() => {
-    return localStorage.getItem('mask_dashboard_expenses') === 'true';
-  });
+  const [isChartMasked, setIsChartMasked] = useState<boolean>(() =>
+    sessionStorage.getItem('mask_dashboard_chart') === null ? true : sessionStorage.getItem('mask_dashboard_chart') === 'true'
+  );
+  const [isExpensesMasked, setIsExpensesMasked] = useState<boolean>(() =>
+    sessionStorage.getItem('mask_dashboard_expenses') === null ? true : sessionStorage.getItem('mask_dashboard_expenses') === 'true'
+  );
+  const [isCashFlowMasked, setIsCashFlowMasked] = useState<boolean>(() =>
+    sessionStorage.getItem('mask_dashboard_cashflow') === null ? true : sessionStorage.getItem('mask_dashboard_cashflow') === 'true'
+  );
+  const [isBalanceTrendMasked, setIsBalanceTrendMasked] = useState<boolean>(() =>
+    sessionStorage.getItem('mask_dashboard_balance_trend') === null ? true : sessionStorage.getItem('mask_dashboard_balance_trend') === 'true'
+  );
 
-  const toggleChartMask = () => {
-    setIsChartMasked((prev) => {
-      const next = !prev;
-      localStorage.setItem('mask_dashboard_chart', String(next));
-      return next;
-    });
-  };
-  const toggleExpensesMask = () => {
-    setIsExpensesMasked((prev) => {
-      const next = !prev;
-      localStorage.setItem('mask_dashboard_expenses', String(next));
-      return next;
-    });
-  };
+  const toggleChartMask = () => setIsChartMasked((prev) => { const next = !prev; sessionStorage.setItem('mask_dashboard_chart', String(next)); return next; });
+  const toggleExpensesMask = () => setIsExpensesMasked((prev) => { const next = !prev; sessionStorage.setItem('mask_dashboard_expenses', String(next)); return next; });
+  const toggleCashFlowMask = () => setIsCashFlowMasked((prev) => { const next = !prev; sessionStorage.setItem('mask_dashboard_cashflow', String(next)); return next; });
+  const toggleBalanceTrendMask = () => setIsBalanceTrendMasked((prev) => { const next = !prev; sessionStorage.setItem('mask_dashboard_balance_trend', String(next)); return next; });
 
   const getSymbol = () => {
     switch (currency) {
@@ -288,6 +284,14 @@ export default function Dashboard({ stats, isLoading, range, setRange }: Dashboa
       {/* Cash Flow Summary */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 p-5 rounded-2xl border border-border bg-card/25 backdrop-blur-md flex flex-col gap-4 relative group">
+          <button
+            onClick={() => toggleCashFlowMask()}
+            className="absolute top-4 right-4 z-20 p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-800/40 transition-all opacity-60 hover:opacity-100 flex items-center justify-center"
+            title={isCashFlowMasked ? 'Reveal values' : 'Hide values'}
+          >
+            {isCashFlowMasked ? <EyeOff className="w-3.5 h-3.5 text-accent-rose" /> : <Eye className="w-3.5 h-3.5 text-accent-emerald" />}
+          </button>
+
           <div className="pr-8">
             <h3 className="text-base font-bold text-gray-200">Cash Flow Summary</h3>
             <p className="text-xs text-gray-500">Lifetime income, outflow, and available cash</p>
@@ -296,18 +300,18 @@ export default function Dashboard({ stats, isLoading, range, setRange }: Dashboa
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
             <div className="p-4 rounded-xl bg-accent-emerald/5 border border-accent-emerald/20 flex flex-col gap-2">
               <span className="text-xs font-bold text-accent-emerald uppercase tracking-wider">Total Income</span>
-              <span className="text-lg font-extrabold text-white">{formatCurrency(totalIncome)}</span>
+              <span className={`text-lg font-extrabold text-white transition-all duration-300 ${isCashFlowMasked ? 'blur-md select-none' : ''}`}>{formatCurrency(totalIncome)}</span>
             </div>
             <div className="p-4 rounded-xl bg-accent-rose/5 border border-accent-rose/20 flex flex-col gap-2">
               <span className="text-xs font-bold text-accent-rose uppercase tracking-wider">Total Outflow</span>
-              <span className="text-lg font-extrabold text-white">{formatCurrency(totalOutflow)}</span>
+              <span className={`text-lg font-extrabold text-white transition-all duration-300 ${isCashFlowMasked ? 'blur-md select-none' : ''}`}>{formatCurrency(totalOutflow)}</span>
               <div className="flex gap-2 text-[10px] text-gray-400">
-                <span>Expenses: {formatCurrency(totalExpense)}</span>
+                <span className={`transition-all duration-300 ${isCashFlowMasked ? 'blur-sm select-none' : ''}`}>Expenses: {formatCurrency(totalExpense)}</span>
               </div>
             </div>
             <div className="p-4 rounded-xl bg-accent-indigo/5 border border-accent-indigo/20 flex flex-col gap-2">
               <span className="text-xs font-bold text-accent-indigo uppercase tracking-wider">Liquid Balance</span>
-              <span className={`text-lg font-extrabold ${liquidBalance >= 0 ? 'text-accent-emerald' : 'text-accent-rose'}`}>
+              <span className={`text-lg font-extrabold transition-all duration-300 ${liquidBalance >= 0 ? 'text-accent-emerald' : 'text-accent-rose'} ${isCashFlowMasked ? 'blur-md select-none' : ''}`}>
                 {formatCurrency(liquidBalance)}
               </span>
             </div>
@@ -316,6 +320,14 @@ export default function Dashboard({ stats, isLoading, range, setRange }: Dashboa
 
         {/* Liquid Balance Trend miniature */}
         <div className="p-5 rounded-2xl border border-border bg-card/25 backdrop-blur-md flex flex-col gap-4 relative group">
+          <button
+            onClick={() => toggleBalanceTrendMask()}
+            className="absolute top-4 right-4 z-20 p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-800/40 transition-all opacity-60 hover:opacity-100 flex items-center justify-center"
+            title={isBalanceTrendMasked ? 'Reveal values' : 'Hide values'}
+          >
+            {isBalanceTrendMasked ? <EyeOff className="w-3.5 h-3.5 text-accent-rose" /> : <Eye className="w-3.5 h-3.5 text-accent-emerald" />}
+          </button>
+
           <div className="pr-8">
             <h3 className="text-base font-bold text-gray-200">Balance Trend</h3>
             <p className="text-xs text-gray-500">Liquid balance over time</p>
@@ -329,7 +341,7 @@ export default function Dashboard({ stats, isLoading, range, setRange }: Dashboa
               <span className="text-sm font-medium">No historical data</span>
             </div>
           ) : (
-            <div className="h-36 w-full">
+            <div className={`h-36 w-full transition-all duration-300 ${isBalanceTrendMasked ? 'blur-md select-none' : 'blur-none'}`}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={liquidBalanceTrends} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                   <defs>
