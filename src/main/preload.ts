@@ -15,6 +15,9 @@ contextBridge.exposeInMainWorld('api', {
 
   // Categories & Stats
   getCategories: () => ipcRenderer.invoke('db:get-categories'),
+  addCategory: (cat: any) => ipcRenderer.invoke('db:add-category', cat),
+  updateCategory: (id: number, cat: any) => ipcRenderer.invoke('db:update-category', id, cat),
+  deleteCategory: (id: number) => ipcRenderer.invoke('db:delete-category', id),
   getStats: () => ipcRenderer.invoke('db:get-stats'),
 
   // Backup & Restore

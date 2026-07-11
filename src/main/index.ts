@@ -127,6 +127,18 @@ ipcMain.handle('db:get-categories', async () => {
   return db.getCategories();
 });
 
+ipcMain.handle('db:add-category', async (_, cat) => {
+  return db.addCategory(cat);
+});
+
+ipcMain.handle('db:update-category', async (_, id, cat) => {
+  return db.updateCategory(id, cat);
+});
+
+ipcMain.handle('db:delete-category', async (_, id) => {
+  return db.deleteCategory(id);
+});
+
 ipcMain.handle('db:get-stats', async () => {
   return db.getStats();
 });

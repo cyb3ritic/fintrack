@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Sparkles, Pencil, Trash2, X, AlertCircle, ChevronDown } from 'lucide-react';
 import { Investment } from '../hooks/useDatabase';
-import { formatINR } from '../utils/format';
 import { useToast } from './Toast';
+import { useCurrency } from '../context/CurrencyContext';
 
 interface InvestmentsProps {
   investments: Investment[];
@@ -19,6 +19,7 @@ export default function Investments({
   deleteInvestment,
 }: InvestmentsProps) {
   const { showToast } = useToast();
+  const { formatCurrency } = useCurrency();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
 
@@ -132,7 +133,7 @@ export default function Investments({
             <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Total Portfolio Valuation</span>
             <div className="flex items-baseline gap-2.5">
               <h2 className="text-3xl font-extrabold text-white tracking-tight select-text">
-                {formatINR(totalCurrentValue)}
+                {formatCurrency(totalCurrentValue)}
               </h2>
               <span
                 className={`text-xs font-bold px-2 py-0.5 rounded ${
@@ -148,7 +149,7 @@ export default function Investments({
           <div className="flex gap-10 z-10">
             <div className="flex flex-col">
               <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1">Total Principal</span>
-              <span className="text-lg font-bold text-gray-300 select-text">{formatINR(totalPrincipal)}</span>
+              <span className="text-lg font-bold text-gray-300 select-text">{formatCurrency(totalPrincipal)}</span>
             </div>
             
             <div className="flex flex-col">
@@ -159,7 +160,7 @@ export default function Investments({
                 }`}
               >
                 {portfolioGain >= 0 ? '+' : ''}
-                {formatINR(portfolioGain)}
+                {formatCurrency(portfolioGain)}
               </span>
             </div>
           </div>
@@ -247,11 +248,11 @@ export default function Investments({
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   <div className="flex flex-col">
                     <span className="text-[10px] text-gray-500 font-semibold uppercase">Invested</span>
-                    <span className="text-sm font-bold text-gray-300 select-all">{formatINR(inv.invested_amount)}</span>
+                    <span className="text-sm font-bold text-gray-300 select-all">{formatCurrency(inv.invested_amount)}</span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[10px] text-gray-500 font-semibold uppercase">Current Value</span>
-                    <span className="text-sm font-bold text-white select-all">{formatINR(inv.current_value)}</span>
+                    <span className="text-sm font-bold text-white select-all">{formatCurrency(inv.current_value)}</span>
                   </div>
                 </div>
 
@@ -260,7 +261,7 @@ export default function Investments({
                   <span className="text-gray-500">Wealth Change</span>
                   <span className={assetGain >= 0 ? 'text-accent-emerald' : 'text-accent-rose'}>
                     {assetGain >= 0 ? '+' : ''}
-                    {formatINR(assetGain)} ({assetGainPercent.toFixed(1)}%)
+                    {formatCurrency(assetGain)} ({assetGainPercent.toFixed(1)}%)
                   </span>
                 </div>
 

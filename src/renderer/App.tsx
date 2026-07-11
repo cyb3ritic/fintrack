@@ -25,6 +25,9 @@ export default function App() {
     addInvestment,
     updateInvestment,
     deleteInvestment,
+    addCategory,
+    updateCategory,
+    deleteCategory,
   } = useDatabase();
 
   return (
@@ -54,6 +57,7 @@ export default function App() {
                 <Transactions
                   transactions={transactions}
                   categories={categories}
+                  investments={investments}
                   filters={filters}
                   setFilters={setFilters}
                   addTransaction={addTransaction}
@@ -72,7 +76,12 @@ export default function App() {
               )}
               
               {activeTab === 'settings' && (
-                <Settings />
+                <Settings
+                  categories={categories}
+                  addCategory={addCategory}
+                  updateCategory={updateCategory}
+                  deleteCategory={deleteCategory}
+                />
               )}
             </motion.div>
           </AnimatePresence>

@@ -1,13 +1,20 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, Edit2, Trash2, X, AlertCircle, ChevronDown } from 'lucide-react';
-import { Transaction, Category } from '../hooks/useDatabase';
-import { formatINR, formatDate } from '../utils/format';
+import { 
+  Plus, Search, Edit2, Trash2, X, AlertCircle, ChevronDown,
+  Tag, Briefcase, Terminal, TrendingUp, Utensils, Home, 
+  Zap, Tv, ShoppingBag, Car, HeartPulse, Layers, 
+  Lock, Coins, CircleDot, FolderOpen
+} from 'lucide-react';
+import { Transaction, Category, Investment } from '../hooks/useDatabase';
+import { formatDate } from '../utils/format';
 import { useToast } from './Toast';
+import { useCurrency } from '../context/CurrencyContext';
 
 interface TransactionsProps {
   transactions: Transaction[];
   categories: Category[];
+  investments: Investment[];
   filters: any;
   setFilters: (filters: any) => void;
   addTransaction: (tx: any) => Promise<any>;
@@ -18,6 +25,7 @@ interface TransactionsProps {
 export default function Transactions({
   transactions,
   categories,
+  investments,
   filters,
   setFilters,
   addTransaction,
@@ -25,11 +33,22 @@ export default function Transactions({
   deleteTransaction,
 }: TransactionsProps) {
   const { showToast } = useToast();
+  const { formatCurrency } = useCurrency();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   
   // Search text filter (applied client-side for ultra-fast responsive feedback)
   const [search, setSearch] = useState('');
+
+  const renderCategoryIcon = (iconName: string, color: string) => {
+    const iconComponents: Record<string, any> = {
+      Tag, Briefcase, Terminal, TrendingUp, Utensils, Home, 
+      Zap, Tv, ShoppingBag, Car, HeartPulse, Layers, 
+      Lock, Coins, CircleDot, FolderOpen
+    };
+    const Component = iconComponents[iconName] || Tag;
+    return <Component className="w-3.5 h-3.5 animate-pulse" style={{ color }} />;
+  };
 
   // Form states
   const [formData, setFormData] = useState({
@@ -39,6 +58,7 @@ export default function Transactions({
     category: '',
     subcategory: '',
     note: '',
+    asset_id: '',
   });
 
   // Automatically select a matching category when the type changes
@@ -59,6 +79,7 @@ export default function Transactions({
       category: tx.category,
       subcategory: tx.subcategory || '',
       note: tx.note || '',
+      asset_id: tx.asset_id ? tx.asset_id.toString() : '',
     });
     setIsModalOpen(true);
   };
@@ -74,6 +95,7 @@ export default function Transactions({
       category: firstExpenseCat,
       subcategory: '',
       note: '',
+      asset_id: '',
     });
     setIsModalOpen(true);
   };
@@ -91,6 +113,7 @@ export default function Transactions({
     const payload = {
       ...formData,
       amount: amountVal,
+      asset_id: formData.type === 'investment' && formData.asset_id ? parseInt(formData.asset_id, 10) : null,
     };
 
     try {
@@ -276,12 +299,22 @@ export default function Transactions({
                       {tx.type}
                     </span>
                   </div>
-                  <div className="col-span-3 flex flex-col">
-                    <span className="text-gray-200">{tx.category}</span>
-                    {tx.subcategory && (
-                      <span className="text-[10px] text-gray-500 font-semibold">{tx.subcategory}</span>
-                    )}
-                  </div>
+                  {(() => {
+                    const catObj = categories.find((c) => c.name === tx.category);
+                    return (
+                      <div className="col-span-3 flex items-center gap-2.5">
+                        <div className="p-1.5 rounded-lg bg-gray-900/40 flex items-center justify-center flex-shrink-0">
+                          {renderCategoryIcon(catObj?.icon || 'Tag', catObj?.color || '#64748b')}
+                        </div>
+                        <div className="flex flex-col truncate">
+                          <span className="text-gray-200 truncate">{tx.category}</span>
+                          {tx.subcategory && (
+                            <span className="text-[10px] text-gray-500 font-semibold truncate">{tx.subcategory}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="col-span-3 text-gray-400 text-xs truncate max-w-[200px]" title={tx.note}>
                     {tx.note || '-'}
                   </div>
@@ -314,7 +347,7 @@ export default function Transactions({
                       }`}
                     >
                       {tx.type === 'expense' ? '-' : ''}
-                      {formatINR(tx.amount)}
+                      {formatCurrency(tx.amount)}
                     </span>
                   </div>
                 </motion.div>
@@ -363,7 +396,11 @@ export default function Transactions({
                     <button
                       key={t}
                       type="button"
-                      onClick={() => setFormData({ ...formData, type: t as any })}
+                      onClick={() => setFormData({ 
+                        ...formData, 
+                        type: t as any,
+                        asset_id: t === 'investment' ? formData.asset_id : ''
+                      })}
                       className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors capitalize ${
                         formData.type === t
                           ? t === 'income'
@@ -439,6 +476,28 @@ export default function Transactions({
                       className="w-full bg-card/50 border border-border rounded-xl px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-accent-indigo focus:ring-1 focus:ring-accent-indigo"
                     />
                   </div>
+
+                  {/* Link to Asset Dropdown when type is investment */}
+                  {formData.type === 'investment' && (
+                    <div className="flex flex-col gap-1.5 col-span-2">
+                      <label className="text-xs font-semibold text-gray-400">Link to Asset Portfolio</label>
+                      <div className="relative">
+                        <select
+                          value={formData.asset_id}
+                          onChange={(e) => setFormData({ ...formData, asset_id: e.target.value })}
+                          className="w-full appearance-none bg-card/50 border border-border rounded-xl pl-3 pr-10 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent-indigo transition-colors"
+                        >
+                          <option value="" className="bg-[#161920] text-gray-400">-- Select Portfolio Asset (Optional) --</option>
+                          {investments.map((inv) => (
+                            <option key={inv.id} value={inv.id.toString()} className="bg-[#161920] text-gray-200">
+                              {inv.asset_name} ({inv.asset_type})
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3.5 top-3.5 pointer-events-none" />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Note */}

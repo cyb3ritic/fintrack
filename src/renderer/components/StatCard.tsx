@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { LucideIcon } from 'lucide-react';
+import { useCurrency } from '../context/CurrencyContext';
 
 interface StatCardProps {
   title: string;
@@ -12,13 +13,16 @@ interface StatCardProps {
 }
 
 export function AnimatedNumber({ value }: { value: number }) {
-  const [displayValue, setDisplayValue] = useState(0);
+  const [displayValue, setDisplayValue] = useState(value);
+  const prevValueRef = useRef(value);
+  const { formatCurrency } = useCurrency();
 
   useEffect(() => {
-    let start = 0;
+    const start = prevValueRef.current;
     const end = value;
     const duration = 800; // ms
     const startTime = performance.now();
+    let animationFrameId: number;
 
     const updateNumber = (now: number) => {
       const elapsed = now - startTime;
@@ -31,22 +35,23 @@ export function AnimatedNumber({ value }: { value: number }) {
       setDisplayValue(current);
 
       if (progress < 1) {
-        requestAnimationFrame(updateNumber);
+        animationFrameId = requestAnimationFrame(updateNumber);
       } else {
         setDisplayValue(end);
       }
     };
 
-    requestAnimationFrame(updateNumber);
+    animationFrameId = requestAnimationFrame(updateNumber);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      prevValueRef.current = end;
+    };
   }, [value]);
 
   return (
     <span>
-      {new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-        maximumFractionDigits: 0
-      }).format(displayValue)}
+      {formatCurrency(displayValue)}
     </span>
   );
 }

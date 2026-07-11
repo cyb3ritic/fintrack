@@ -9,6 +9,7 @@ export interface Transaction {
   category: string;
   subcategory?: string;
   note?: string;
+  asset_id?: number | null;
   created_at: string;
 }
 
@@ -37,6 +38,7 @@ export interface DashboardStats {
   categoryExpenses: { category: string; value: number }[];
   monthlyTrends: { month: string; income: number; expense: number }[];
   assetAllocation: { type: string; value: number }[];
+  netWorthTrends: { month: string; value: number }[];
 }
 
 // Typing for the Electron contextBridge API
@@ -59,6 +61,9 @@ declare global {
       deleteInvestment: (id: number) => Promise<{ id: number }>;
       
       getCategories: () => Promise<Category[]>;
+      addCategory: (cat: Omit<Category, 'id'>) => Promise<Category>;
+      updateCategory: (id: number, cat: Omit<Category, 'id'>) => Promise<Category>;
+      deleteCategory: (id: number) => Promise<{ id: number }>;
       getStats: () => Promise<DashboardStats>;
       
       backupDatabase: (password: string) => Promise<{ success: boolean; filePath?: string; error?: string }>;
@@ -150,6 +155,24 @@ export function useDatabase() {
     return result;
   };
 
+  const addCategory = async (cat: Omit<Category, 'id'>) => {
+    const result = await window.api.addCategory(cat);
+    await refreshData();
+    return result;
+  };
+
+  const updateCategory = async (id: number, cat: Omit<Category, 'id'>) => {
+    const result = await window.api.updateCategory(id, cat);
+    await refreshData();
+    return result;
+  };
+
+  const deleteCategory = async (id: number) => {
+    const result = await window.api.deleteCategory(id);
+    await refreshData();
+    return result;
+  };
+
   return {
     transactions,
     investments,
@@ -164,6 +187,9 @@ export function useDatabase() {
     deleteTransaction,
     addInvestment,
     updateInvestment,
-    deleteInvestment
+    deleteInvestment,
+    addCategory,
+    updateCategory,
+    deleteCategory
   };
 }

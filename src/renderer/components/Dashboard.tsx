@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Wallet, Landmark, TrendingUp, CircleDollarSign, AlertCircle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import StatCard from './StatCard';
 import { DashboardStats } from '../hooks/useDatabase';
-import { formatINR } from '../utils/format';
+import { useCurrency } from '../context/CurrencyContext';
 
 interface DashboardProps {
   stats: DashboardStats | null;
@@ -32,6 +33,18 @@ const itemVariants = {
 };
 
 export default function Dashboard({ stats, isLoading }: DashboardProps) {
+  const [trendTab, setTrendTab] = useState<'cashflow' | 'networth'>('cashflow');
+  const { formatCurrency, currency } = useCurrency();
+
+  const getSymbol = () => {
+    switch (currency) {
+      case 'USD': return '$';
+      case 'EUR': return '€';
+      case 'GBP': return '£';
+      default: return '₹';
+    }
+  };
+
   // Safe default calculations if stats are missing
   const netWorth = stats?.netWorth ?? 0;
   const cash = stats?.cash ?? 0;
@@ -40,6 +53,7 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
   const categoryExpenses = stats?.categoryExpenses ?? [];
   const monthlyTrends = stats?.monthlyTrends ?? [];
   const assetAllocation = stats?.assetAllocation ?? [];
+  const netWorthTrends = stats?.netWorthTrends ?? [];
 
   // Net investment gains
   const investmentGain = currentInvestmentValue - totalInvested;
@@ -57,7 +71,7 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.color || p.fill }} />
                 <span className="text-gray-300">{p.name}:</span>
               </span>
-              <span className="text-gray-100">{formatINR(p.value)}</span>
+              <span className="text-gray-100">{formatCurrency(p.value)}</span>
             </div>
           ))}
         </div>
@@ -75,7 +89,7 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: data.payload.fill }} />
             <span className="text-gray-300">{data.name}:</span>
           </span>
-          <span className="text-gray-100">{formatINR(data.value)}</span>
+          <span className="text-gray-100">{formatCurrency(data.value)}</span>
         </div>
       );
     }
@@ -141,40 +155,92 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
       <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Trend Area Chart */}
         <div className="lg:col-span-2 p-5 rounded-2xl border border-border bg-card/25 backdrop-blur-md flex flex-col gap-4">
-          <div>
-            <h3 className="text-base font-bold text-gray-200">Income vs Expenses</h3>
-            <p className="text-xs text-gray-500">6-Month financial trends</p>
+          <div className="flex justify-between items-center select-none">
+            <div>
+              <h3 className="text-base font-bold text-gray-200">
+                {trendTab === 'cashflow' ? 'Income vs Expenses' : 'Net Worth Growth'}
+              </h3>
+              <p className="text-xs text-gray-500">
+                {trendTab === 'cashflow' ? '6-Month financial cash flow trends' : '6-Month cumulative net worth progression'}
+              </p>
+            </div>
+            
+            {/* Toggle tabs */}
+            <div className="flex bg-card rounded-lg border border-border p-1">
+              <button
+                onClick={() => setTrendTab('cashflow')}
+                className={`text-[10px] font-extrabold uppercase tracking-wider py-1.5 px-3 rounded-md transition-colors ${
+                  trendTab === 'cashflow' ? 'bg-accent-indigo/20 text-accent-indigo' : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                Cash Flow
+              </button>
+              <button
+                onClick={() => setTrendTab('networth')}
+                className={`text-[10px] font-extrabold uppercase tracking-wider py-1.5 px-3 rounded-md transition-colors ${
+                  trendTab === 'networth' ? 'bg-accent-indigo/20 text-accent-indigo' : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                Net Worth
+              </button>
+            </div>
           </div>
           
           <div className="h-72 w-full">
             {isLoading ? (
               <div className="w-full h-full bg-gray-900/50 animate-pulse rounded-lg" />
-            ) : monthlyTrends.length === 0 ? (
-              <div className="w-full h-full flex flex-col items-center justify-center border border-dashed border-border rounded-xl text-gray-500">
-                <AlertCircle className="w-8 h-8 mb-2 opacity-50" />
-                <span className="text-sm font-medium">Not enough historical transaction data</span>
-              </div>
+            ) : trendTab === 'cashflow' ? (
+              monthlyTrends.length === 0 ? (
+                <div className="w-full h-full flex flex-col items-center justify-center border border-dashed border-border rounded-xl text-gray-500">
+                  <AlertCircle className="w-8 h-8 mb-2 opacity-50" />
+                  <span className="text-sm font-medium">Not enough historical transaction data</span>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={monthlyTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1b202c" />
+                    <XAxis dataKey="month" stroke="#475569" fontSize={11} tickLine={false} />
+                    <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${getSymbol()}${v >= 1000 ? `${v/1000}k` : v}`} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area name="Income" type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorIncome)" />
+                    <Area name="Expense" type="monotone" dataKey="expense" stroke="#f43f5e" strokeWidth={2} fillOpacity={1} fill="url(#colorExpense)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={monthlyTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1b202c" />
-                  <XAxis dataKey="month" stroke="#475569" fontSize={11} tickLine={false} />
-                  <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v/1000}k`} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area name="Income" type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorIncome)" />
-                  <Area name="Expense" type="monotone" dataKey="expense" stroke="#f43f5e" strokeWidth={2} fillOpacity={1} fill="url(#colorExpense)" />
-                </AreaChart>
-              </ResponsiveContainer>
+              // Net Worth Area Chart
+              netWorthTrends.length === 0 ? (
+                <div className="w-full h-full flex flex-col items-center justify-center border border-dashed border-border rounded-xl text-gray-500">
+                  <AlertCircle className="w-8 h-8 mb-2 opacity-50" />
+                  <span className="text-sm font-medium">No historical net worth data found</span>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={netWorthTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorNetWorth" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1b202c" />
+                    <XAxis dataKey="month" stroke="#475569" fontSize={11} tickLine={false} />
+                    <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `${getSymbol()}${v >= 1000 ? `${v/1000}k` : v}`} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area name="Net Worth" type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorNetWorth)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )
             )}
           </div>
         </div>
@@ -220,7 +286,7 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
                 <div className="absolute flex flex-col items-center justify-center select-none pointer-events-none">
                   <span className="text-[10px] uppercase font-bold tracking-widest text-gray-500">Total Expense</span>
                   <span className="text-xl font-extrabold text-white">
-                    {formatINR(categoryExpenses.reduce((sum, item) => sum + item.value, 0))}
+                    {formatCurrency(categoryExpenses.reduce((sum, item) => sum + item.value, 0))}
                   </span>
                 </div>
               </>
@@ -260,10 +326,10 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
                         {percent.toFixed(1)}%
                       </span>
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-lg font-extrabold text-white">{formatINR(asset.value)}</span>
-                      <span className="text-[10px] text-gray-500 font-semibold uppercase">Current Value</span>
-                    </div>
+                     <div className="flex flex-col">
+                       <span className="text-lg font-extrabold text-white">{formatCurrency(asset.value)}</span>
+                       <span className="text-[10px] text-gray-500 font-semibold uppercase">Current Value</span>
+                     </div>
                   </div>
                 );
               })}
@@ -281,19 +347,19 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
           <div className="flex flex-col gap-5 my-2">
             <div className="flex justify-between items-center border-b border-border/50 pb-3">
               <span className="text-xs text-gray-400 font-semibold">Invested Principal</span>
-              <span className="text-sm font-bold text-white">{formatINR(totalInvested)}</span>
+              <span className="text-sm font-bold text-white">{formatCurrency(totalInvested)}</span>
             </div>
             
             <div className="flex justify-between items-center border-b border-border/50 pb-3">
               <span className="text-xs text-gray-400 font-semibold">Current Value</span>
-              <span className="text-sm font-bold text-white">{formatINR(currentInvestmentValue)}</span>
+              <span className="text-sm font-bold text-white">{formatCurrency(currentInvestmentValue)}</span>
             </div>
 
             <div className="flex justify-between items-center">
               <span className="text-xs text-gray-400 font-semibold">Total Gain / Loss</span>
               <div className={`flex items-center gap-1 font-bold text-sm ${investmentGain >= 0 ? 'text-accent-emerald' : 'text-accent-rose'}`}>
                 {investmentGain >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                <span>{formatINR(Math.abs(investmentGain))}</span>
+                <span>{formatCurrency(Math.abs(investmentGain))}</span>
                 <span className="text-xs font-semibold">({investmentGainPercent.toFixed(1)}%)</span>
               </div>
             </div>
