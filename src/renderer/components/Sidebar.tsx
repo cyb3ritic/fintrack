@@ -1,7 +1,7 @@
-import { LayoutDashboard, Receipt, BarChart3, Settings, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Receipt, BarChart3, Settings, TrendingUp, Target } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export type TabId = 'dashboard' | 'transactions' | 'investments' | 'settings';
+export type TabId = 'dashboard' | 'transactions' | 'investments' | 'goals' | 'settings';
 
 interface SidebarProps {
   activeTab: TabId;
@@ -13,6 +13,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
     { id: 'dashboard' as TabId, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'transactions' as TabId, label: 'Transactions', icon: Receipt },
     { id: 'investments' as TabId, label: 'Investments', icon: BarChart3 },
+    { id: 'goals' as TabId, label: 'Goals & Wishlist', icon: Target },
     { id: 'settings' as TabId, label: 'Settings', icon: Settings },
   ];
 

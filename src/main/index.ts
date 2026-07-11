@@ -139,8 +139,24 @@ ipcMain.handle('db:delete-category', async (_, id) => {
   return db.deleteCategory(id);
 });
 
-ipcMain.handle('db:get-stats', async () => {
-  return db.getStats();
+ipcMain.handle('db:get-stats', async (_, range) => {
+  return db.getStats(range);
+});
+
+ipcMain.handle('db:get-goals', async () => {
+  return db.getGoals();
+});
+
+ipcMain.handle('db:add-goal', async (_, goal) => {
+  return db.addGoal(goal);
+});
+
+ipcMain.handle('db:update-goal', async (_, id, goal) => {
+  return db.updateGoal(id, goal);
+});
+
+ipcMain.handle('db:delete-goal', async (_, id) => {
+  return db.deleteGoal(id);
 });
 
 // ----------------------------------------------------

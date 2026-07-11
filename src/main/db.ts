@@ -53,6 +53,15 @@ export function initDatabase() {
         ALTER TABLE transactions ADD COLUMN asset_id INTEGER REFERENCES investments(id) ON DELETE SET NULL;
       `);
     }
+    if (!txColumns.some(col => col.name === 'activity_type')) {
+      console.log('Running migration: Adding activity_type column to transactions');
+      db.exec(`
+        ALTER TABLE transactions ADD COLUMN activity_type TEXT DEFAULT 'none';
+      `);
+      db.exec(`
+        UPDATE transactions SET activity_type = 'buy' WHERE type = 'investment';
+      `);
+    }
   }
 
   // 1. Transactions Table
@@ -66,6 +75,7 @@ export function initDatabase() {
       subcategory TEXT,
       note TEXT,
       asset_id INTEGER REFERENCES investments(id) ON DELETE SET NULL,
+      activity_type TEXT CHECK(activity_type IN ('buy', 'sell', 'dividend', 'none')) DEFAULT 'none',
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -102,6 +112,18 @@ export function initDatabase() {
       current_value REAL NOT NULL,
       date TEXT NOT NULL,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // 5. Financial Goals Table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS financial_goals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      target_amount REAL NOT NULL,
+      current_allocated REAL DEFAULT 0,
+      target_date TEXT,
+      linked_asset_id INTEGER REFERENCES investments(id) ON DELETE SET NULL
     )
   `);
 
@@ -184,10 +206,24 @@ export function closeDatabase() {
   }
 }
 
+// Helper to resolve transaction asset balance multipliers
+export function getInvestmentMultiplier(type: string, activityType?: string): number {
+  if (type !== 'investment') return 0;
+  const act = activityType || 'buy';
+  if (act === 'buy') return 1;
+  if (act === 'sell') return -1;
+  return 0; // dividend or none
+}
+
 // Helper to record investment history with daily local calendar day idempotency (check-then-write/upsert)
-export function recordInvestmentHistory(investmentId: number, investedAmount: number, currentValue: number) {
-  const d = new Date();
-  const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export function recordInvestmentHistory(investmentId: number, investedAmount: number, currentValue: number, customDate?: string) {
+  let dateStr: string;
+  if (customDate) {
+    dateStr = customDate;
+  } else {
+    const d = new Date();
+    dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
 
   const checkStmt = db.prepare('SELECT id FROM investment_history WHERE investment_id = ? AND date = ?');
   const existing = checkStmt.get(investmentId, dateStr) as { id: number } | undefined;
@@ -202,7 +238,7 @@ export function recordInvestmentHistory(investmentId: number, investedAmount: nu
 }
 
 // Helper to update investment valuations and track its history in one atomic go
-export function adjustAssetAndRecordHistory(assetId: number, investedDelta: number, valueDelta: number) {
+export function adjustAssetAndRecordHistory(assetId: number, investedDelta: number, valueDelta: number, customDate?: string) {
   db.prepare(`
     UPDATE investments
     SET invested_amount = invested_amount + ?,
@@ -213,7 +249,7 @@ export function adjustAssetAndRecordHistory(assetId: number, investedDelta: numb
 
   const updated = db.prepare('SELECT invested_amount, current_value FROM investments WHERE id = ?').get(assetId) as { invested_amount: number; current_value: number } | undefined;
   if (updated) {
-    recordInvestmentHistory(assetId, updated.invested_amount, updated.current_value);
+    recordInvestmentHistory(assetId, updated.invested_amount, updated.current_value, customDate);
   }
 }
 
@@ -259,13 +295,15 @@ export function addTransaction(tx: {
   subcategory?: string;
   note?: string;
   asset_id?: number | null;
+  activity_type?: 'buy' | 'sell' | 'dividend' | 'none';
 }) {
   const stmt = db.prepare(`
-    INSERT INTO transactions (date, amount, type, category, subcategory, note, asset_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO transactions (date, amount, type, category, subcategory, note, asset_id, activity_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const execute = db.transaction(() => {
+    const actType = tx.type === 'investment' ? (tx.activity_type || 'buy') : 'none';
     const result = stmt.run(
       tx.date,
       tx.amount,
@@ -273,18 +311,19 @@ export function addTransaction(tx: {
       tx.category,
       tx.subcategory || null,
       tx.note || null,
-      tx.asset_id || null
+      tx.asset_id || null,
+      actType
     );
 
-    const delta = tx.type === 'investment' ? tx.amount : 0;
+    const mult = getInvestmentMultiplier(tx.type, actType);
+    const delta = tx.amount * mult;
     if (tx.asset_id && delta !== 0) {
-      db.prepare(`
-        UPDATE investments
-        SET invested_amount = invested_amount + ?,
-            current_value = current_value + ?,
-            last_updated = datetime('now')
-        WHERE id = ?
-      `).run(delta, delta, tx.asset_id);
+      adjustAssetAndRecordHistory(tx.asset_id, delta, delta, tx.date);
+    } else if (tx.asset_id) {
+      const asset = db.prepare('SELECT invested_amount, current_value FROM investments WHERE id = ?').get(tx.asset_id) as { invested_amount: number; current_value: number } | undefined;
+      if (asset) {
+        recordInvestmentHistory(tx.asset_id, asset.invested_amount, asset.current_value, tx.date);
+      }
     }
     return result.lastInsertRowid;
   });
@@ -303,62 +342,52 @@ export function updateTransaction(
     subcategory?: string;
     note?: string;
     asset_id?: number | null;
+    activity_type?: 'buy' | 'sell' | 'dividend' | 'none';
   }
 ) {
-  const getTx = db.prepare('SELECT amount, type, asset_id FROM transactions WHERE id = ?');
+  const getTx = db.prepare('SELECT date, amount, type, asset_id, activity_type FROM transactions WHERE id = ?');
   const updateTx = db.prepare(`
     UPDATE transactions
-    SET date = ?, amount = ?, type = ?, category = ?, subcategory = ?, note = ?, asset_id = ?
+    SET date = ?, amount = ?, type = ?, category = ?, subcategory = ?, note = ?, asset_id = ?, activity_type = ?
     WHERE id = ?
   `);
 
   const execute = db.transaction(() => {
-    const oldTx = getTx.get(id) as { amount: number; type: string; asset_id: number | null } | undefined;
+    const oldTx = getTx.get(id) as { date: string; amount: number; type: string; asset_id: number | null; activity_type: string } | undefined;
+    const actType = tx.type === 'investment' ? (tx.activity_type || 'buy') : 'none';
 
     if (oldTx) {
       const oldAssetId = oldTx.asset_id;
       const newAssetId = tx.asset_id || null;
 
-      if (oldAssetId !== newAssetId) {
-        // Revert old asset adjustment
-        if (oldAssetId) {
-          const oldDelta = oldTx.type === 'investment' ? oldTx.amount : 0;
-          if (oldDelta !== 0) {
-            db.prepare(`
-              UPDATE investments
-              SET invested_amount = invested_amount - ?,
-                  current_value = current_value - ?,
-                  last_updated = datetime('now')
-              WHERE id = ?
-            `).run(oldDelta, oldDelta, oldAssetId);
+      // 1. Revert old asset adjustment
+      if (oldAssetId) {
+        const oldMult = getInvestmentMultiplier(oldTx.type, oldTx.activity_type);
+        const oldDelta = oldTx.amount * oldMult;
+        if (oldDelta !== 0) {
+          adjustAssetAndRecordHistory(oldAssetId, -oldDelta, -oldDelta, oldTx.date);
+        }
+      }
+
+      // 2. Apply new asset adjustment
+      if (newAssetId) {
+        const newMult = getInvestmentMultiplier(tx.type, actType);
+        const newDelta = tx.amount * newMult;
+        if (newDelta !== 0) {
+          adjustAssetAndRecordHistory(newAssetId, newDelta, newDelta, tx.date);
+        } else {
+          const asset = db.prepare('SELECT invested_amount, current_value FROM investments WHERE id = ?').get(newAssetId) as { invested_amount: number; current_value: number } | undefined;
+          if (asset) {
+            recordInvestmentHistory(newAssetId, asset.invested_amount, asset.current_value, tx.date);
           }
         }
-        // Apply new asset adjustment
-        if (newAssetId) {
-          const newDelta = tx.type === 'investment' ? tx.amount : 0;
-          if (newDelta !== 0) {
-            db.prepare(`
-              UPDATE investments
-              SET invested_amount = invested_amount + ?,
-                  current_value = current_value + ?,
-                  last_updated = datetime('now')
-              WHERE id = ?
-            `).run(newDelta, newDelta, newAssetId);
-          }
-        }
-      } else if (newAssetId) {
-        // Same asset linked, calculate delta difference
-        const oldDelta = oldTx.type === 'investment' ? oldTx.amount : 0;
-        const newDelta = tx.type === 'investment' ? tx.amount : 0;
-        const diff = newDelta - oldDelta;
-        if (diff !== 0) {
-          db.prepare(`
-            UPDATE investments
-            SET invested_amount = invested_amount + ?,
-                current_value = current_value + ?,
-                last_updated = datetime('now')
-            WHERE id = ?
-          `).run(diff, diff, newAssetId);
+      }
+
+      // 3. Keep histories aligned in case of Date shifts
+      if (oldTx.date !== tx.date && oldAssetId && oldAssetId === newAssetId) {
+        const asset = db.prepare('SELECT invested_amount, current_value FROM investments WHERE id = ?').get(oldAssetId) as { invested_amount: number; current_value: number } | undefined;
+        if (asset) {
+          recordInvestmentHistory(oldAssetId, asset.invested_amount, asset.current_value, oldTx.date);
         }
       }
     }
@@ -371,6 +400,7 @@ export function updateTransaction(
       tx.subcategory || null,
       tx.note || null,
       tx.asset_id || null,
+      actType,
       id
     );
   });
@@ -380,21 +410,21 @@ export function updateTransaction(
 }
 
 export function deleteTransaction(id: number) {
-  const getTx = db.prepare('SELECT amount, type, asset_id FROM transactions WHERE id = ?');
+  const getTx = db.prepare('SELECT date, amount, type, asset_id, activity_type FROM transactions WHERE id = ?');
   const deleteTx = db.prepare('DELETE FROM transactions WHERE id = ?');
 
   const execute = db.transaction(() => {
-    const oldTx = getTx.get(id) as { amount: number; type: string; asset_id: number | null } | undefined;
+    const oldTx = getTx.get(id) as { date: string; amount: number; type: string; asset_id: number | null; activity_type: string } | undefined;
     if (oldTx && oldTx.asset_id) {
-      const delta = oldTx.type === 'investment' ? oldTx.amount : 0;
-      if (delta !== 0) {
-        db.prepare(`
-          UPDATE investments
-          SET invested_amount = invested_amount - ?,
-              current_value = current_value - ?,
-              last_updated = datetime('now')
-          WHERE id = ?
-        `).run(delta, delta, oldTx.asset_id);
+      const oldMult = getInvestmentMultiplier(oldTx.type, oldTx.activity_type);
+      const oldDelta = oldTx.amount * oldMult;
+      if (oldDelta !== 0) {
+        adjustAssetAndRecordHistory(oldTx.asset_id, -oldDelta, -oldDelta, oldTx.date);
+      } else {
+        const asset = db.prepare('SELECT invested_amount, current_value FROM investments WHERE id = ?').get(oldTx.asset_id) as { invested_amount: number; current_value: number } | undefined;
+        if (asset) {
+          recordInvestmentHistory(oldTx.asset_id, asset.invested_amount, asset.current_value, oldTx.date);
+        }
       }
     }
     deleteTx.run(id);
@@ -528,17 +558,133 @@ export function deleteCategory(id: number) {
 }
 
 // ----------------------------------------------------
+// FINANCIAL GOALS CRUD
+// ----------------------------------------------------
+
+export function getGoals() {
+  const goals = db.prepare('SELECT * FROM financial_goals ORDER BY target_date ASC, id ASC').all() as any[];
+  
+  return goals.map((goal) => {
+    let current_allocated = goal.current_allocated;
+    
+    if (goal.linked_asset_id) {
+      const asset = db.prepare('SELECT current_value FROM investments WHERE id = ?').get(goal.linked_asset_id) as { current_value: number } | undefined;
+      if (asset) {
+        current_allocated = asset.current_value;
+      }
+    }
+    
+    const isCompleted = current_allocated >= goal.target_amount;
+    
+    return {
+      ...goal,
+      current_allocated,
+      isCompleted,
+    };
+  });
+}
+
+export function addGoal(goal: {
+  title: string;
+  target_amount: number;
+  current_allocated: number;
+  target_date?: string | null;
+  linked_asset_id?: number | null;
+}) {
+  const stmt = db.prepare(`
+    INSERT INTO financial_goals (title, target_amount, current_allocated, target_date, linked_asset_id)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  const result = stmt.run(
+    goal.title,
+    goal.target_amount,
+    goal.current_allocated || 0,
+    goal.target_date || null,
+    goal.linked_asset_id || null
+  );
+  return { id: result.lastInsertRowid, ...goal };
+}
+
+export function updateGoal(
+  id: number,
+  goal: {
+    title: string;
+    target_amount: number;
+    current_allocated: number;
+    target_date?: string | null;
+    linked_asset_id?: number | null;
+  }
+) {
+  const stmt = db.prepare(`
+    UPDATE financial_goals
+    SET title = ?, target_amount = ?, current_allocated = ?, target_date = ?, linked_asset_id = ?
+    WHERE id = ?
+  `);
+  stmt.run(
+    goal.title,
+    goal.target_amount,
+    goal.current_allocated || 0,
+    goal.target_date || null,
+    goal.linked_asset_id || null,
+    id
+  );
+  return { id, ...goal };
+}
+
+export function deleteGoal(id: number) {
+  db.prepare('DELETE FROM financial_goals WHERE id = ?').run(id);
+  return { id };
+}
+
+// ----------------------------------------------------
 // STATISTICS & DASHBOARD DATA
 // ----------------------------------------------------
 
-export function getStats() {
+export function getRangeSpecs(range: string = '6M'): {
+  type: 'daily' | 'monthly';
+  count: number;
+} {
+  switch (range) {
+    case '1M':
+      return { type: 'daily', count: 30 };
+    case '3M':
+      return { type: 'monthly', count: 3 };
+    case '6M':
+      return { type: 'monthly', count: 6 };
+    case '1Y':
+      return { type: 'monthly', count: 12 };
+    case 'ALL': {
+      const oldestData = db.prepare(`
+        SELECT MIN(date) as oldestDate FROM (
+          SELECT MIN(date) as date FROM transactions
+          UNION
+          SELECT MIN(date) as date FROM investment_history
+        )
+      `).get() as { oldestDate: string | null };
+      
+      let months = 6;
+      if (oldestData?.oldestDate) {
+        const oldest = new Date(oldestData.oldestDate);
+        const today = new Date();
+        months = (today.getFullYear() - oldest.getFullYear()) * 12 + (today.getMonth() - oldest.getMonth()) + 1;
+      }
+      return { type: 'monthly', count: Math.max(1, months) };
+    }
+    default:
+      return { type: 'monthly', count: 6 };
+  }
+}
+
+export function getStats(range = '6M') {
   // 1. Calculate Cash Flow
   // Cash = Income - Expense - Investment (outflows)
   const cashFlow = db.prepare(`
     SELECT 
       SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as totalIncome,
       SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as totalExpense,
-      SUM(CASE WHEN type = 'investment' THEN amount ELSE 0 END) as totalInvestmentOutflow
+      SUM(CASE WHEN type = 'investment' AND activity_type = 'buy' THEN amount 
+               WHEN type = 'investment' AND activity_type = 'sell' THEN -amount
+               ELSE 0 END) as totalInvestmentOutflow
     FROM transactions
   `).get() as { totalIncome: number | null; totalExpense: number | null; totalInvestmentOutflow: number | null };
 
@@ -570,34 +716,59 @@ export function getStats() {
     ORDER BY value DESC
   `).all() as { category: string; value: number }[];
 
-  // 4. Monthly trends (Last 6 months Income vs Expense)
-  // Let's generate a list of the last 6 months in format YYYY-MM
+  // 4. Monthly trends (Income vs Expense) based on range selection
+  const specs = getRangeSpecs(range);
   const monthlyTrends: { month: string; income: number; expense: number }[] = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    
-    // Construct local date components rather than using d.toISOString() to prevent midnight shifts
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const monthStr = `${year}-${month}`;
-    
-    // Format month for display (e.g. 'Jan 2026')
-    const displayMonth = d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
 
-    const monthData = db.prepare(`
-      SELECT 
-        SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as inc,
-        SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as exp
-      FROM transactions
-      WHERE date LIKE ?
-    `).get(`${monthStr}%`) as { inc: number | null; exp: number | null };
+  if (specs.type === 'daily') {
+    for (let i = specs.count - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      
+      const displayLabel = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      
+      const dayData = db.prepare(`
+        SELECT 
+          SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as inc,
+          SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as exp
+        FROM transactions
+        WHERE date = ?
+      `).get(dateStr) as { inc: number | null; exp: number | null };
 
-    monthlyTrends.push({
-      month: displayMonth,
-      income: monthData.inc || 0,
-      expense: monthData.exp || 0
-    });
+      monthlyTrends.push({
+        month: displayLabel,
+        income: dayData.inc || 0,
+        expense: dayData.exp || 0
+      });
+    }
+  } else {
+    for (let i = specs.count - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const monthStr = `${year}-${month}`;
+      
+      const displayMonth = d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+
+      const monthData = db.prepare(`
+        SELECT 
+          SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as inc,
+          SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as exp
+        FROM transactions
+        WHERE date LIKE ?
+      `).get(`${monthStr}%`) as { inc: number | null; exp: number | null };
+
+      monthlyTrends.push({
+        month: displayMonth,
+        income: monthData.inc || 0,
+        expense: monthData.exp || 0
+      });
+    }
   }
 
   // 5. Asset Allocation for investment widget (Stocks, Mutual Funds, FD, Crypto, Gold)
@@ -615,7 +786,7 @@ export function getStats() {
     categoryExpenses,
     monthlyTrends,
     assetAllocation,
-    netWorthTrends: getHistoricNetWorth()
+    netWorthTrends: getHistoricNetWorth(range)
   };
 }
 
@@ -625,7 +796,9 @@ export function getHistoricNetWorthAtDate(dateStr: string): number {
     SELECT 
       SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) -
       SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) -
-      SUM(CASE WHEN type = 'investment' THEN amount ELSE 0 END) as cumulativeCash
+      SUM(CASE WHEN type = 'investment' AND activity_type = 'buy' THEN amount 
+               WHEN type = 'investment' AND activity_type = 'sell' THEN -amount
+               ELSE 0 END) as cumulativeCash
     FROM transactions
     WHERE date <= ?
   `).get(dateStr) as { cumulativeCash: number | null };
@@ -650,17 +823,31 @@ export function getHistoricNetWorthAtDate(dateStr: string): number {
   return cumulativeCash + totalInvestmentValue;
 }
 
-export function getHistoricNetWorth(): { month: string; value: number }[] {
+export function getHistoricNetWorth(range = '6M'): { month: string; value: number }[] {
+  const specs = getRangeSpecs(range);
   const netWorthTrends: { month: string; value: number }[] = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-    const dateStr = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
-    
-    const displayMonth = lastDay.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
-    const netWorth = getHistoricNetWorthAtDate(dateStr);
-    netWorthTrends.push({ month: displayMonth, value: netWorth });
+
+  if (specs.type === 'daily') {
+    for (let i = specs.count - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      
+      const displayLabel = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      const netWorth = getHistoricNetWorthAtDate(dateStr);
+      netWorthTrends.push({ month: displayLabel, value: netWorth });
+    }
+  } else {
+    for (let i = specs.count - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      const dateStr = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
+      
+      const displayMonth = lastDay.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+      const netWorth = getHistoricNetWorthAtDate(dateStr);
+      netWorthTrends.push({ month: displayMonth, value: netWorth });
+    }
   }
   return netWorthTrends;
 }

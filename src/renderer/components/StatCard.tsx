@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { LucideIcon } from 'lucide-react';
+import { LucideIcon, Eye, EyeOff } from 'lucide-react';
 import { useCurrency } from '../context/CurrencyContext';
 
 interface StatCardProps {
@@ -57,6 +57,20 @@ export function AnimatedNumber({ value }: { value: number }) {
 }
 
 export default function StatCard({ title, value, icon: Icon, colorClass, isLoading, subtitle }: StatCardProps) {
+  const [isMasked, setIsMasked] = useState<boolean>(() => {
+    const key = `mask_stat_card_${title.toLowerCase().replace(/\s+/g, '_')}`;
+    return localStorage.getItem(key) === 'true';
+  });
+
+  const toggleMask = () => {
+    setIsMasked((prev) => {
+      const next = !prev;
+      const key = `mask_stat_card_${title.toLowerCase().replace(/\s+/g, '_')}`;
+      localStorage.setItem(key, String(next));
+      return next;
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="p-6 rounded-2xl border border-border bg-card/50 flex flex-col gap-4 animate-pulse">
@@ -78,7 +92,19 @@ export default function StatCard({ title, value, icon: Icon, colorClass, isLoadi
       {/* Background Subtle Gradient Glow */}
       <div className={`absolute -right-10 -bottom-10 w-32 h-32 rounded-full opacity-5 blur-3xl transition-opacity duration-300 group-hover:opacity-10 bg-current ${colorClass}`} />
 
-      <div className="flex justify-between items-start">
+      {/* Eye Toggle in Top-Right Corner */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleMask();
+        }}
+        className="absolute top-3 right-3 z-20 p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-800/40 transition-all opacity-60 hover:opacity-100 flex items-center justify-center"
+        title={isMasked ? 'Reveal value' : 'Hide value'}
+      >
+        {isMasked ? <EyeOff className="w-3.5 h-3.5 text-accent-rose" /> : <Eye className="w-3.5 h-3.5 text-accent-emerald" />}
+      </button>
+
+      <div className="flex justify-between items-start pr-6">
         <span className="text-sm font-semibold text-gray-400">{title}</span>
         <div className={`p-2.5 rounded-xl ${colorClass} bg-opacity-10 shadow-sm flex items-center justify-center`}>
           <Icon className="w-5 h-5" />
@@ -86,7 +112,7 @@ export default function StatCard({ title, value, icon: Icon, colorClass, isLoadi
       </div>
 
       <div className="flex flex-col gap-1 mt-2">
-        <h2 className="text-3xl font-extrabold tracking-tight text-white select-text">
+        <h2 className={`text-3xl font-extrabold tracking-tight text-white select-text ${isMasked ? 'blur-md select-none transition-all duration-300' : ''}`}>
           <AnimatedNumber value={value} />
         </h2>
         {subtitle && (

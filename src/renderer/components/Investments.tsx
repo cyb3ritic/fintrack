@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Sparkles, Pencil, Trash2, X, AlertCircle, ChevronDown } from 'lucide-react';
+import { Plus, Sparkles, Pencil, Trash2, X, AlertCircle, ChevronDown, Eye, EyeOff } from 'lucide-react';
 import { Investment } from '../hooks/useDatabase';
 import { useToast } from './Toast';
 import { useCurrency } from '../context/CurrencyContext';
@@ -20,6 +20,19 @@ export default function Investments({
 }: InvestmentsProps) {
   const { showToast } = useToast();
   const { formatCurrency } = useCurrency();
+  
+  const [isTotalValuationMasked, setIsTotalValuationMasked] = useState<boolean>(() => {
+    return localStorage.getItem('mask_investments_valuation') === 'true';
+  });
+
+  const toggleValuationMask = () => {
+    setIsTotalValuationMasked((prev) => {
+      const next = !prev;
+      localStorage.setItem('mask_investments_valuation', String(next));
+      return next;
+    });
+  };
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
 
@@ -130,9 +143,18 @@ export default function Investments({
       {investments.length > 0 && (
         <div className="p-6 rounded-2xl border border-border bg-card/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 select-none relative overflow-hidden">
           <div className="flex flex-col gap-1.5 z-10">
-            <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Total Portfolio Valuation</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Total Portfolio Valuation</span>
+              <button
+                onClick={() => toggleValuationMask()}
+                className="p-1 rounded-lg text-gray-500 hover:text-white hover:bg-gray-800/40 transition-all flex items-center justify-center"
+                title={isTotalValuationMasked ? 'Reveal values' : 'Hide values'}
+              >
+                {isTotalValuationMasked ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
             <div className="flex items-baseline gap-2.5">
-              <h2 className="text-3xl font-extrabold text-white tracking-tight select-text">
+              <h2 className={`text-3xl font-extrabold text-white tracking-tight select-text transition-all duration-300 ${isTotalValuationMasked ? 'blur-md select-none' : 'blur-none'}`}>
                 {formatCurrency(totalCurrentValue)}
               </h2>
               <span
@@ -149,15 +171,15 @@ export default function Investments({
           <div className="flex gap-10 z-10">
             <div className="flex flex-col">
               <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1">Total Principal</span>
-              <span className="text-lg font-bold text-gray-300 select-text">{formatCurrency(totalPrincipal)}</span>
+              <span className={`text-lg font-bold text-gray-300 select-text transition-all duration-300 ${isTotalValuationMasked ? 'blur-md select-none' : 'blur-none'}`}>{formatCurrency(totalPrincipal)}</span>
             </div>
             
             <div className="flex flex-col">
               <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1">Total Wealth Gain</span>
               <span
-                className={`text-lg font-extrabold select-text ${
+                className={`text-lg font-extrabold select-text transition-all duration-300 ${
                   portfolioGain >= 0 ? 'text-accent-emerald' : 'text-accent-rose'
-                }`}
+                } ${isTotalValuationMasked ? 'blur-md select-none' : 'blur-none'}`}
               >
                 {portfolioGain >= 0 ? '+' : ''}
                 {formatCurrency(portfolioGain)}
@@ -361,7 +383,6 @@ export default function Investments({
                       value={formData.invested_amount}
                       onChange={(e) => setFormData({ ...formData, invested_amount: e.target.value })}
                       className="w-full bg-card/50 border border-border rounded-xl px-3 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-accent-indigo transition-colors font-semibold"
-                      disabled={!!editingInvestment} // In standard trackers, you record capital injections as additions, locking principal during basic evaluation is standard
                     />
                   </div>
 

@@ -10,6 +10,7 @@ export interface Transaction {
   subcategory?: string;
   note?: string;
   asset_id?: number | null;
+  activity_type?: 'buy' | 'sell' | 'dividend' | 'none';
   created_at: string;
 }
 
@@ -20,6 +21,16 @@ export interface Investment {
   invested_amount: number;
   current_value: number;
   last_updated: string;
+}
+
+export interface Goal {
+  id: number;
+  title: string;
+  target_amount: number;
+  current_allocated: number;
+  target_date?: string | null;
+  linked_asset_id?: number | null;
+  isCompleted: boolean;
 }
 
 export interface Category {
@@ -64,7 +75,12 @@ declare global {
       addCategory: (cat: Omit<Category, 'id'>) => Promise<Category>;
       updateCategory: (id: number, cat: Omit<Category, 'id'>) => Promise<Category>;
       deleteCategory: (id: number) => Promise<{ id: number }>;
-      getStats: () => Promise<DashboardStats>;
+      getStats: (range?: string) => Promise<DashboardStats>;
+      
+      getGoals: () => Promise<Goal[]>;
+      addGoal: (goal: Omit<Goal, 'id' | 'isCompleted'>) => Promise<Goal>;
+      updateGoal: (id: number, goal: Omit<Goal, 'id' | 'isCompleted'>) => Promise<Goal>;
+      deleteGoal: (id: number) => Promise<{ id: number }>;
       
       backupDatabase: (password: string) => Promise<{ success: boolean; filePath?: string; error?: string }>;
       selectBackupFile: () => Promise<{ canceled: boolean; filePath?: string }>;
@@ -85,7 +101,9 @@ export function useDatabase() {
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [range, setRange] = useState<string>('6M');
   const [filters, setFilters] = useState<{
     startDate?: string;
     endDate?: string;
@@ -96,22 +114,24 @@ export function useDatabase() {
   const refreshData = useCallback(async () => {
     try {
       setLoading(true);
-      const [txData, invData, catData, statsData] = await Promise.all([
+      const [txData, invData, catData, statsData, goalsData] = await Promise.all([
         window.api.getTransactions(filters),
         window.api.getInvestments(),
         window.api.getCategories(),
-        window.api.getStats()
+        window.api.getStats(range),
+        window.api.getGoals()
       ]);
       setTransactions(txData);
       setInvestments(invData);
       setCategories(catData);
       setStats(statsData);
+      setGoals(goalsData);
     } catch (err) {
       console.error('Failed to load database content:', err);
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, range]);
 
   useEffect(() => {
     refreshData();
@@ -173,11 +193,30 @@ export function useDatabase() {
     return result;
   };
 
+  const addGoal = async (goal: Omit<Goal, 'id' | 'isCompleted'>) => {
+    const result = await window.api.addGoal(goal);
+    await refreshData();
+    return result;
+  };
+
+  const updateGoal = async (id: number, goal: Omit<Goal, 'id' | 'isCompleted'>) => {
+    const result = await window.api.updateGoal(id, goal);
+    await refreshData();
+    return result;
+  };
+
+  const deleteGoal = async (id: number) => {
+    const result = await window.api.deleteGoal(id);
+    await refreshData();
+    return result;
+  };
+
   return {
     transactions,
     investments,
     categories,
     stats,
+    goals,
     loading,
     filters,
     setFilters,
@@ -190,6 +229,11 @@ export function useDatabase() {
     deleteInvestment,
     addCategory,
     updateCategory,
-    deleteCategory
+    deleteCategory,
+    addGoal,
+    updateGoal,
+    deleteGoal,
+    range,
+    setRange
   };
 }

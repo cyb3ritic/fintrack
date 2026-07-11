@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, Landmark, TrendingUp, CircleDollarSign, AlertCircle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Wallet, Landmark, TrendingUp, CircleDollarSign, AlertCircle, ArrowUpRight, ArrowDownRight, Eye, EyeOff } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
 import StatCard from './StatCard';
 import { DashboardStats } from '../hooks/useDatabase';
@@ -9,6 +9,8 @@ import { useCurrency } from '../context/CurrencyContext';
 interface DashboardProps {
   stats: DashboardStats | null;
   isLoading: boolean;
+  range: string;
+  setRange: (range: string) => void;
 }
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#0ea5e9', '#f43f5e', '#14b8a6', '#64748b'];
@@ -32,9 +34,51 @@ const itemVariants = {
   }
 };
 
-export default function Dashboard({ stats, isLoading }: DashboardProps) {
+export default function Dashboard({ stats, isLoading, range, setRange }: DashboardProps) {
   const [trendTab, setTrendTab] = useState<'cashflow' | 'networth'>('cashflow');
   const { formatCurrency, currency } = useCurrency();
+  
+  const [isChartMasked, setIsChartMasked] = useState<boolean>(() => {
+    return localStorage.getItem('mask_dashboard_chart') === 'true';
+  });
+  const [isExpensesMasked, setIsExpensesMasked] = useState<boolean>(() => {
+    return localStorage.getItem('mask_dashboard_expenses') === 'true';
+  });
+  const [isAssetsMasked, setIsAssetsMasked] = useState<boolean>(() => {
+    return localStorage.getItem('mask_dashboard_assets') === 'true';
+  });
+  const [isPerformanceMasked, setIsPerformanceMasked] = useState<boolean>(() => {
+    return localStorage.getItem('mask_dashboard_performance') === 'true';
+  });
+
+  const toggleChartMask = () => {
+    setIsChartMasked((prev) => {
+      const next = !prev;
+      localStorage.setItem('mask_dashboard_chart', String(next));
+      return next;
+    });
+  };
+  const toggleExpensesMask = () => {
+    setIsExpensesMasked((prev) => {
+      const next = !prev;
+      localStorage.setItem('mask_dashboard_expenses', String(next));
+      return next;
+    });
+  };
+  const toggleAssetsMask = () => {
+    setIsAssetsMasked((prev) => {
+      const next = !prev;
+      localStorage.setItem('mask_dashboard_assets', String(next));
+      return next;
+    });
+  };
+  const togglePerformanceMask = () => {
+    setIsPerformanceMasked((prev) => {
+      const next = !prev;
+      localStorage.setItem('mask_dashboard_performance', String(next));
+      return next;
+    });
+  };
 
   const getSymbol = () => {
     switch (currency) {
@@ -71,7 +115,7 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.color || p.fill }} />
                 <span className="text-gray-300">{p.name}:</span>
               </span>
-              <span className="text-gray-100">{formatCurrency(p.value)}</span>
+              <span className={`text-gray-100 ${isChartMasked ? 'blur-sm select-none' : ''}`}>{formatCurrency(p.value)}</span>
             </div>
           ))}
         </div>
@@ -89,7 +133,7 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: data.payload.fill }} />
             <span className="text-gray-300">{data.name}:</span>
           </span>
-          <span className="text-gray-100">{formatCurrency(data.value)}</span>
+          <span className={`text-gray-100 ${isExpensesMasked ? 'blur-sm select-none' : ''}`}>{formatCurrency(data.value)}</span>
         </div>
       );
     }
@@ -154,39 +198,65 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
       {/* Charts Grid */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Trend Area Chart */}
-        <div className="lg:col-span-2 p-5 rounded-2xl border border-border bg-card/25 backdrop-blur-md flex flex-col gap-4">
-          <div className="flex justify-between items-center select-none">
+        <div className="lg:col-span-2 p-5 rounded-2xl border border-border bg-card/25 backdrop-blur-md flex flex-col gap-4 relative group">
+          {/* Eye Toggle in Top-Right */}
+          <button
+            onClick={() => toggleChartMask()}
+            className="absolute top-4 right-4 z-20 p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-800/40 transition-all opacity-60 hover:opacity-100 flex items-center justify-center"
+            title={isChartMasked ? 'Reveal values' : 'Hide values'}
+          >
+            {isChartMasked ? <EyeOff className="w-3.5 h-3.5 text-accent-rose" /> : <Eye className="w-3.5 h-3.5 text-accent-emerald" />}
+          </button>
+
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 select-none pr-8">
             <div>
               <h3 className="text-base font-bold text-gray-200">
                 {trendTab === 'cashflow' ? 'Income vs Expenses' : 'Net Worth Growth'}
               </h3>
               <p className="text-xs text-gray-500">
-                {trendTab === 'cashflow' ? '6-Month financial cash flow trends' : '6-Month cumulative net worth progression'}
+                {trendTab === 'cashflow' ? 'Cash flow transaction activity trends' : 'Cumulative net worth progression timeline'}
               </p>
             </div>
             
-            {/* Toggle tabs */}
-            <div className="flex bg-card rounded-lg border border-border p-1">
-              <button
-                onClick={() => setTrendTab('cashflow')}
-                className={`text-[10px] font-extrabold uppercase tracking-wider py-1.5 px-3 rounded-md transition-colors ${
-                  trendTab === 'cashflow' ? 'bg-accent-indigo/20 text-accent-indigo' : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                Cash Flow
-              </button>
-              <button
-                onClick={() => setTrendTab('networth')}
-                className={`text-[10px] font-extrabold uppercase tracking-wider py-1.5 px-3 rounded-md transition-colors ${
-                  trendTab === 'networth' ? 'bg-accent-indigo/20 text-accent-indigo' : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                Net Worth
-              </button>
+            <div className="flex items-center gap-3">
+              {/* Range selectors */}
+              <div className="flex bg-card rounded-lg border border-border p-1">
+                {['1M', '3M', '6M', '1Y', 'ALL'].map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setRange(r)}
+                    className={`text-[9px] font-extrabold uppercase py-1.5 px-2.5 rounded-md transition-colors ${
+                      range === r ? 'bg-accent-indigo/20 text-accent-indigo' : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+
+              {/* Toggle tabs */}
+              <div className="flex bg-card rounded-lg border border-border p-1">
+                <button
+                  onClick={() => setTrendTab('cashflow')}
+                  className={`text-[10px] font-extrabold uppercase tracking-wider py-1.5 px-3 rounded-md transition-colors ${
+                    trendTab === 'cashflow' ? 'bg-accent-indigo/20 text-accent-indigo' : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  Cash Flow
+                </button>
+                <button
+                  onClick={() => setTrendTab('networth')}
+                  className={`text-[10px] font-extrabold uppercase tracking-wider py-1.5 px-3 rounded-md transition-colors ${
+                    trendTab === 'networth' ? 'bg-accent-indigo/20 text-accent-indigo' : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  Net Worth
+                </button>
+              </div>
             </div>
           </div>
           
-          <div className="h-72 w-full">
+          <div className={`h-72 w-full transition-all duration-300 ${isChartMasked ? 'blur-md select-none' : 'blur-none'}`}>
             {isLoading ? (
               <div className="w-full h-full bg-gray-900/50 animate-pulse rounded-lg" />
             ) : trendTab === 'cashflow' ? (
@@ -246,13 +316,22 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
         </div>
 
         {/* Expenses Donut Chart */}
-        <div className="p-5 rounded-2xl border border-border bg-card/25 backdrop-blur-md flex flex-col gap-4">
-          <div>
+        <div className="p-5 rounded-2xl border border-border bg-card/25 backdrop-blur-md flex flex-col gap-4 relative group">
+          {/* Eye Toggle in Top-Right */}
+          <button
+            onClick={() => toggleExpensesMask()}
+            className="absolute top-4 right-4 z-20 p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-800/40 transition-all opacity-60 hover:opacity-100 flex items-center justify-center"
+            title={isExpensesMasked ? 'Reveal values' : 'Hide values'}
+          >
+            {isExpensesMasked ? <EyeOff className="w-3.5 h-3.5 text-accent-rose" /> : <Eye className="w-3.5 h-3.5 text-accent-emerald" />}
+          </button>
+
+          <div className="pr-8">
             <h3 className="text-base font-bold text-gray-200">Category Breakdown</h3>
             <p className="text-xs text-gray-500">Expenses distributed by category</p>
           </div>
 
-          <div className="h-72 w-full flex items-center justify-center relative">
+          <div className={`h-72 w-full flex items-center justify-center relative transition-all duration-300 ${isExpensesMasked ? 'blur-md select-none' : 'blur-none'}`}>
             {isLoading ? (
               <div className="w-full h-full bg-gray-900/50 animate-pulse rounded-lg" />
             ) : categoryExpenses.length === 0 ? (
@@ -285,7 +364,7 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
                 {/* Total Expense Label inside donut */}
                 <div className="absolute flex flex-col items-center justify-center select-none pointer-events-none">
                   <span className="text-[10px] uppercase font-bold tracking-widest text-gray-500">Total Expense</span>
-                  <span className="text-xl font-extrabold text-white">
+                  <span className={`text-xl font-extrabold text-white transition-all duration-300 ${isExpensesMasked ? 'blur-md select-none' : ''}`}>
                     {formatCurrency(categoryExpenses.reduce((sum, item) => sum + item.value, 0))}
                   </span>
                 </div>
@@ -298,8 +377,17 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
       {/* Investment Portfolio Widget */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Asset Distribution */}
-        <div className="lg:col-span-2 p-5 rounded-2xl border border-border bg-card/25 backdrop-blur-md flex flex-col gap-4 justify-between">
-          <div>
+        <div className="lg:col-span-2 p-5 rounded-2xl border border-border bg-card/25 backdrop-blur-md flex flex-col gap-4 justify-between relative group">
+          {/* Eye Toggle in Top-Right */}
+          <button
+            onClick={() => toggleAssetsMask()}
+            className="absolute top-4 right-4 z-20 p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-800/40 transition-all opacity-60 hover:opacity-100 flex items-center justify-center"
+            title={isAssetsMasked ? 'Reveal values' : 'Hide values'}
+          >
+            {isAssetsMasked ? <EyeOff className="w-3.5 h-3.5 text-accent-rose" /> : <Eye className="w-3.5 h-3.5 text-accent-emerald" />}
+          </button>
+
+          <div className="pr-8">
             <h3 className="text-base font-bold text-gray-200">Portfolio Distribution</h3>
             <p className="text-xs text-gray-500">Asset classes current valuation details</p>
           </div>
@@ -327,7 +415,9 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
                       </span>
                     </div>
                      <div className="flex flex-col">
-                       <span className="text-lg font-extrabold text-white">{formatCurrency(asset.value)}</span>
+                        <span className={`text-lg font-extrabold text-white transition-all duration-300 ${isAssetsMasked ? 'blur-md select-none' : ''}`}>
+                         {formatCurrency(asset.value)}
+                       </span>
                        <span className="text-[10px] text-gray-500 font-semibold uppercase">Current Value</span>
                      </div>
                   </div>
@@ -338,8 +428,17 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
         </div>
 
         {/* Investment Performance summary */}
-        <div className="p-5 rounded-2xl border border-border bg-card/25 backdrop-blur-md flex flex-col justify-between gap-4">
-          <div>
+        <div className="p-5 rounded-2xl border border-border bg-card/25 backdrop-blur-md flex flex-col justify-between gap-4 relative group">
+          {/* Eye Toggle in Top-Right */}
+          <button
+            onClick={() => togglePerformanceMask()}
+            className="absolute top-4 right-4 z-20 p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-gray-800/40 transition-all opacity-60 hover:opacity-100 flex items-center justify-center"
+            title={isPerformanceMasked ? 'Reveal values' : 'Hide values'}
+          >
+            {isPerformanceMasked ? <EyeOff className="w-3.5 h-3.5 text-accent-rose" /> : <Eye className="w-3.5 h-3.5 text-accent-emerald" />}
+          </button>
+
+          <div className="pr-8">
             <h3 className="text-base font-bold text-gray-200">Portfolio Performance</h3>
             <p className="text-xs text-gray-500">Unrealized profit & loss calculation</p>
           </div>
@@ -347,19 +446,19 @@ export default function Dashboard({ stats, isLoading }: DashboardProps) {
           <div className="flex flex-col gap-5 my-2">
             <div className="flex justify-between items-center border-b border-border/50 pb-3">
               <span className="text-xs text-gray-400 font-semibold">Invested Principal</span>
-              <span className="text-sm font-bold text-white">{formatCurrency(totalInvested)}</span>
+              <span className={`text-sm font-bold text-white transition-all duration-300 ${isPerformanceMasked ? 'blur-md select-none' : ''}`}>{formatCurrency(totalInvested)}</span>
             </div>
             
             <div className="flex justify-between items-center border-b border-border/50 pb-3">
               <span className="text-xs text-gray-400 font-semibold">Current Value</span>
-              <span className="text-sm font-bold text-white">{formatCurrency(currentInvestmentValue)}</span>
+              <span className={`text-sm font-bold text-white transition-all duration-300 ${isPerformanceMasked ? 'blur-md select-none' : ''}`}>{formatCurrency(currentInvestmentValue)}</span>
             </div>
 
             <div className="flex justify-between items-center">
               <span className="text-xs text-gray-400 font-semibold">Total Gain / Loss</span>
               <div className={`flex items-center gap-1 font-bold text-sm ${investmentGain >= 0 ? 'text-accent-emerald' : 'text-accent-rose'}`}>
                 {investmentGain >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                <span>{formatCurrency(Math.abs(investmentGain))}</span>
+                <span className={`transition-all duration-300 ${isPerformanceMasked ? 'blur-md select-none' : ''}`}>{formatCurrency(Math.abs(investmentGain))}</span>
                 <span className="text-xs font-semibold">({investmentGainPercent.toFixed(1)}%)</span>
               </div>
             </div>

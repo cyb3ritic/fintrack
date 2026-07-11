@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard';
 import Transactions from './components/Transactions';
 import Investments from './components/Investments';
 import Settings from './components/Settings';
+import Goals from './components/Goals';
 import { useDatabase } from './hooks/useDatabase';
 import { ToastProvider } from './components/Toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -28,6 +29,12 @@ export default function App() {
     addCategory,
     updateCategory,
     deleteCategory,
+    addGoal,
+    updateGoal,
+    deleteGoal,
+    goals,
+    range,
+    setRange
   } = useDatabase();
 
   return (
@@ -37,8 +44,8 @@ export default function App() {
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
         
         {/* Main Content Pane */}
-        <main className="flex-1 h-screen overflow-hidden p-8 flex flex-col relative bg-gradient-to-br from-background via-background to-card/10">
-          
+        <main className="flex-grow flex-1 h-screen overflow-hidden p-8 flex flex-col relative bg-gradient-to-br from-background via-background to-card/10">
+
           {/* Animated Page Transitions */}
           <AnimatePresence mode="wait">
             <motion.div
@@ -50,7 +57,7 @@ export default function App() {
               className="w-full h-full flex-grow overflow-hidden"
             >
               {activeTab === 'dashboard' && (
-                <Dashboard stats={stats} isLoading={loading} />
+                <Dashboard stats={stats} isLoading={loading} range={range} setRange={setRange} />
               )}
               
               {activeTab === 'transactions' && (
@@ -72,6 +79,16 @@ export default function App() {
                   addInvestment={addInvestment}
                   updateInvestment={updateInvestment}
                   deleteInvestment={deleteInvestment}
+                />
+              )}
+
+              {activeTab === 'goals' && (
+                <Goals
+                  goals={goals}
+                  investments={investments}
+                  addGoal={addGoal}
+                  updateGoal={updateGoal}
+                  deleteGoal={deleteGoal}
                 />
               )}
               

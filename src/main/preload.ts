@@ -18,7 +18,13 @@ contextBridge.exposeInMainWorld('api', {
   addCategory: (cat: any) => ipcRenderer.invoke('db:add-category', cat),
   updateCategory: (id: number, cat: any) => ipcRenderer.invoke('db:update-category', id, cat),
   deleteCategory: (id: number) => ipcRenderer.invoke('db:delete-category', id),
-  getStats: () => ipcRenderer.invoke('db:get-stats'),
+  getStats: (range?: string) => ipcRenderer.invoke('db:get-stats', range),
+
+  // Goals & Wishlist
+  getGoals: () => ipcRenderer.invoke('db:get-goals'),
+  addGoal: (goal: any) => ipcRenderer.invoke('db:add-goal', goal),
+  updateGoal: (id: number, goal: any) => ipcRenderer.invoke('db:update-goal', id, goal),
+  deleteGoal: (id: number) => ipcRenderer.invoke('db:delete-goal', id),
 
   // Backup & Restore
   backupDatabase: (password: string) => ipcRenderer.invoke('sys:backup', password),
