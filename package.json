@@ -1,6 +1,6 @@
 {
   "name": "fintrack",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Secure, local-first Desktop Expense Tracker",
   "author": "cyb3ritic",
   "repository": {
@@ -18,7 +18,8 @@
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-rebuild -w better-sqlite3",
     "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder --publish always"
+    "dist": "npm run build && electron-builder --publish never",
+    "release": "npm run build && electron-builder --publish always"
   },
   "dependencies": {
     "adm-zip": "^0.5.14",
@@ -69,13 +70,14 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
-      "oneClick": true,
+      "oneClick": false,
       "perMachine": false,
       "allowElevation": false,
-      "allowToChangeInstallationDirectory": false,
+      "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "FinTrack",

@@ -84,10 +84,10 @@ export default function Settings({ categories, addCategory, updateCategory, dele
 
   // Update states
   const [updateStatus, setUpdateStatus] = useState<string>('idle');
-  const [isUpdateReady, setIsUpdateReady] = useState(false);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [newVersion, setNewVersion] = useState('');
   const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<{ percent: number; bytesPerSecond: number } | null>(null);
 
   // Category Manager states
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -115,11 +115,9 @@ export default function Settings({ categories, addCategory, updateCategory, dele
       } else if (status === 'error') {
         setUpdateStatus('Error checking for updates.');
         setIsCheckingUpdate(false);
-      } else if (status.startsWith('downloading:')) {
-        const pct = status.split(':')[1];
-        setUpdateStatus(`Downloading update: ${pct}%`);
       } else if (status === 'downloaded') {
-        setUpdateStatus('Update downloaded. Ready to install.');
+        setUpdateStatus('Update ready to install.');
+        setDownloadProgress(null);
         setIsCheckingUpdate(false);
       }
     });
@@ -131,16 +129,15 @@ export default function Settings({ categories, addCategory, updateCategory, dele
       }
     });
 
-    const removeDownloadedListener = window.api.onUpdateDownloaded((ready: boolean) => {
-      if (ready) {
-        setIsUpdateReady(true);
-      }
+    const removeProgressListener = window.api.onUpdateProgress((progress) => {
+      setDownloadProgress({ percent: progress.percent, bytesPerSecond: progress.bytesPerSecond });
+      setUpdateStatus(`Downloading update: ${progress.percent}%`);
     });
 
     return () => {
       removeStatusListener();
       removeAvailableListener();
-      removeDownloadedListener();
+      removeProgressListener();
     };
   }, []);
 
@@ -154,21 +151,20 @@ export default function Settings({ categories, addCategory, updateCategory, dele
     }
   };
 
-  const handleInstallUpdate = () => {
-    window.api.quitAndInstall();
-  };
-
   const handleStartDownload = async () => {
     setShowUpdatePrompt(false);
+    setDownloadProgress(null);
     setUpdateStatus('Downloading update...');
     try {
       const result = await window.api.downloadUpdate();
       if (!result.success) {
         setUpdateStatus(`Download failed: ${result.error}`);
+        setDownloadProgress(null);
         showToast(`Download failed: ${result.error}`, 'error');
       }
     } catch (err: any) {
       setUpdateStatus(`Download error: ${err.message}`);
+      setDownloadProgress(null);
       showToast(`Download error: ${err.message}`, 'error');
     }
   };
@@ -554,7 +550,7 @@ export default function Settings({ categories, addCategory, updateCategory, dele
               <div className="p-6 rounded-2xl border border-border bg-card/20 flex flex-col gap-5 md:col-span-2">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-accent-indigo/10 text-accent-indigo">
-                    <RefreshCw className={`w-5 h-5 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`w-5 h-5 ${isCheckingUpdate || (downloadProgress && downloadProgress.percent < 100) ? 'animate-spin' : ''}`} />
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-gray-200">Software Updates</h3>
@@ -562,7 +558,7 @@ export default function Settings({ categories, addCategory, updateCategory, dele
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-900/30 p-4 rounded-xl border border-border/50">
+                <div className="flex flex-col gap-4 bg-gray-900/30 p-4 rounded-xl border border-border/50">
                   <div className="flex flex-col gap-1">
                     <span className="text-xs text-gray-400 font-semibold">Update Status</span>
                     <span className="text-sm font-bold text-gray-200">
@@ -575,19 +571,38 @@ export default function Settings({ categories, addCategory, updateCategory, dele
                     )}
                   </div>
 
-                  <div className="flex gap-3 w-full sm:w-auto">
-                    {isUpdateReady ? (
-                      <button
-                        onClick={handleInstallUpdate}
-                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-accent-emerald text-white font-semibold text-sm shadow-glow-emerald transition-all animate-pulse"
+                  {/* Animated Download Progress Bar */}
+                  <AnimatePresence>
+                    {downloadProgress && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.25, ease: 'easeOut' }}
+                        className="flex flex-col gap-2 overflow-hidden"
                       >
-                        Restart App to Load Update
-                      </button>
-                    ) : (
+                        <div className="w-full h-2 rounded-full bg-gray-800/80 overflow-hidden">
+                          <motion.div
+                            className="h-full rounded-full bg-gradient-to-r from-accent-indigo to-accent-indigo/70"
+                            initial={{ width: '0%' }}
+                            animate={{ width: `${downloadProgress.percent}%` }}
+                            transition={{ duration: 0.4, ease: 'easeOut' }}
+                          />
+                        </div>
+                        <div className="flex justify-between items-center text-[11px] font-semibold text-gray-400">
+                          <span>{downloadProgress.percent}% complete</span>
+                          <span>{(downloadProgress.bytesPerSecond / 1024 / 1024).toFixed(1)} MB/s</span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <div className="flex justify-end">
+                    {!downloadProgress && (
                       <button
                         onClick={handleCheckUpdates}
                         disabled={isCheckingUpdate}
-                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-accent-indigo hover:bg-accent-indigo/90 text-white font-semibold text-sm shadow-glow-indigo transition-all disabled:opacity-50"
+                        className="px-5 py-2.5 rounded-xl bg-accent-indigo hover:bg-accent-indigo/90 text-white font-semibold text-sm shadow-glow-indigo transition-all disabled:opacity-50"
                       >
                         {isCheckingUpdate ? 'Checking...' : 'Check for Updates'}
                       </button>

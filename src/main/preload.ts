@@ -47,9 +47,9 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('update:available', subscription);
     return () => ipcRenderer.off('update:available', subscription);
   },
-  onUpdateDownloaded: (callback: (ready: boolean) => void) => {
-    const subscription = (_event: any, ready: boolean) => callback(ready);
-    ipcRenderer.on('update:downloaded', subscription);
-    return () => ipcRenderer.off('update:downloaded', subscription);
+  onUpdateProgress: (callback: (progress: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void) => {
+    const subscription = (_event: any, progress: any) => callback(progress);
+    ipcRenderer.on('update:progress', subscription);
+    return () => ipcRenderer.off('update:progress', subscription);
   }
 });

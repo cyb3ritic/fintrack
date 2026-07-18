@@ -4,7 +4,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import AdmZip from 'adm-zip';
 import * as db from './db';
-import { autoUpdater } from 'electron-updater';
+import { initUpdater } from './updater';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -47,6 +47,8 @@ function createWindow() {
 app.whenReady().then(() => {
   db.initDatabase();
   createWindow();
+
+  if (mainWindow) initUpdater(mainWindow);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -293,63 +295,4 @@ ipcMain.handle('sys:restore', async (_, filePath, password) => {
   }
 });
 
-// ----------------------------------------------------
-// AUTO-UPDATER EVENTS & LOGIC
-// ----------------------------------------------------
 
-autoUpdater.autoDownload = false;
-autoUpdater.autoInstallOnAppQuit = true;
-
-autoUpdater.on('checking-for-update', () => {
-  mainWindow?.webContents.send('update:status', 'checking');
-});
-
-autoUpdater.on('update-available', (info) => {
-  mainWindow?.webContents.send('update:status', 'available');
-  mainWindow?.webContents.send('update:available', true, info.version);
-});
-
-autoUpdater.on('update-not-available', () => {
-  mainWindow?.webContents.send('update:status', 'up-to-date');
-  mainWindow?.webContents.send('update:available', false);
-});
-
-autoUpdater.on('error', (err) => {
-  mainWindow?.webContents.send('update:status', 'error');
-  console.error('Auto-updater error:', err);
-});
-
-autoUpdater.on('download-progress', (progressObj) => {
-  mainWindow?.webContents.send('update:status', `downloading:${Math.round(progressObj.percent)}`);
-});
-
-autoUpdater.on('update-downloaded', () => {
-  mainWindow?.webContents.send('update:status', 'downloaded');
-  mainWindow?.webContents.send('update:downloaded', true);
-});
-
-ipcMain.handle('sys:check-for-updates', async () => {
-  try {
-    const result = await autoUpdater.checkForUpdatesAndNotify();
-    return { success: true, result };
-  } catch (err: any) {
-    console.error('Update check fail:', err);
-    return { success: false, error: err.message };
-  }
-});
-
-ipcMain.handle('sys:download-update', async () => {
-  try {
-    const result = await autoUpdater.downloadUpdate();
-    return { success: true, result };
-  } catch (err: any) {
-    console.error('Download update fail:', err);
-    return { success: false, error: err.message };
-  }
-});
-
-ipcMain.on('sys:quit-and-install', () => {
-  // isSilent: true  → suppress the NSIS progress/finish UI during update install
-  // isForceRunAfter: true → relaunch the app immediately after the update is applied
-  autoUpdater.quitAndInstall(true, true);
-});

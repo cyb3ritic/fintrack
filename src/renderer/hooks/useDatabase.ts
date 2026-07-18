@@ -116,7 +116,7 @@ declare global {
       quitAndInstall: () => void;
       onUpdateStatus: (callback: (status: string) => void) => () => void;
       onUpdateAvailable: (callback: (available: boolean, version?: string) => void) => () => void;
-      onUpdateDownloaded: (callback: (ready: boolean) => void) => () => void;
+      onUpdateProgress: (callback: (progress: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void) => () => void;
     };
   }
 }
