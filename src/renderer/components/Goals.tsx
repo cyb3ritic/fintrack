@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Target, Calendar, Plus, Edit2, Trash2, CheckCircle2 } from 'lucide-react';
+import { Target, Calendar, Plus, Edit2, Trash2, CheckCircle2, ExternalLink, ChevronDown } from 'lucide-react';
 import { Goal } from '../hooks/useDatabase';
 import { useCurrency } from '../context/CurrencyContext';
 import { useToast } from './Toast';
@@ -18,12 +18,16 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [activeQuickAddId, setActiveQuickAddId] = useState<number | null>(null);
+  const [quickAddAmount, setQuickAddAmount] = useState('');
+  const [isAchievedOpen, setIsAchievedOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
     target_amount: '',
     current_allocated: '',
     target_date: '',
+    hyperlink: ''
   });
 
   const handleEditClick = (goal: Goal) => {
@@ -33,6 +37,7 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
       target_amount: goal.target_amount.toString(),
       current_allocated: goal.current_allocated.toString(),
       target_date: goal.target_date || '',
+      hyperlink: goal.hyperlink || ''
     });
     setIsModalOpen(true);
   };
@@ -44,6 +49,7 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
       target_amount: '',
       current_allocated: '0',
       target_date: '',
+      hyperlink: ''
     });
     setIsModalOpen(true);
   };
@@ -74,6 +80,7 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
       target_amount: targetAmt,
       current_allocated: currAllocated,
       target_date: formData.target_date || null,
+      hyperlink: formData.hyperlink || null
     };
 
     try {
@@ -90,24 +97,65 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
     }
   };
 
-  // Categorize goals
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const handleQuickAddSubmit = async (goal: Goal, e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = parseFloat(quickAddAmount);
+    if (isNaN(amount) || amount <= 0) {
+      showToast('Please enter a valid amount', 'error');
+      return;
+    }
 
-  const categorizedGoals = goals.reduce(
+    const payload = {
+      title: goal.title,
+      target_amount: goal.target_amount,
+      current_allocated: goal.current_allocated + amount,
+      target_date: goal.target_date || null,
+      hyperlink: goal.hyperlink || null
+    };
+
+    try {
+      await updateGoal(goal.id, payload);
+      showToast(`Added ${formatCurrency(amount)} successfully`, 'success');
+      setActiveQuickAddId(null);
+      setQuickAddAmount('');
+    } catch (err: any) {
+      showToast(`Failed to add funds: ${err.message}`, 'error');
+    }
+  };
+
+  // Helper: Get remaining time specs
+  const getRemainingTime = (dateStr?: string | null) => {
+    if (!dateStr) return null;
+    const target = new Date(dateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    target.setHours(0, 0, 0, 0);
+    
+    const diffTime = target.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffMonths = Math.max(1, Math.ceil(diffDays / 30.44));
+    return { days: diffDays, months: diffMonths };
+  };
+
+  // Separate pending vs achieved goals
+  const pendingGoals = goals.filter((g) => g.current_allocated < g.target_amount);
+  const achievedGoals = goals.filter((g) => g.current_allocated >= g.target_amount);
+
+  // Categorize pending goals
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const categorizedPending = pendingGoals.reduce(
     (acc, goal) => {
-      const pct = goal.target_amount > 0 ? (goal.current_allocated / goal.target_amount) * 100 : 0;
-      const isOverdue = goal.target_date && new Date(goal.target_date) < todayStart && pct < 100;
+      const timeSpecs = getRemainingTime(goal.target_date);
+      const isOverdue = timeSpecs && timeSpecs.days < 0;
 
       if (isOverdue) {
         acc.overdue.push(goal);
       } else if (!goal.target_date) {
         acc.ongoing.push(goal);
       } else {
-        const targetDate = new Date(goal.target_date);
-        const diffTime = targetDate.getTime() - todayStart.getTime();
-        const diffMonths = diffTime / (1000 * 60 * 60 * 24 * 30.44);
-
+        const diffMonths = timeSpecs ? timeSpecs.months : 0;
         if (diffMonths < 12) {
           acc.shortTerm.push(goal);
         } else {
@@ -128,6 +176,17 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (percent / 100) * circumference;
 
+    const timeSpecs = getRemainingTime(goal.target_date);
+    const isCompleted = percent >= 100;
+
+    // Required monthly velocity
+    let monthlyVelocityText = null;
+    if (!isCompleted && !isOverdue && timeSpecs) {
+      const remaining = goal.target_amount - goal.current_allocated;
+      const velocity = Math.ceil(remaining / timeSpecs.months);
+      monthlyVelocityText = `Need ${formatCurrency(velocity)} / month`;
+    }
+
     return (
       <motion.div
         layout
@@ -136,7 +195,7 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
         className={`p-5 rounded-2xl border ${
           isOverdue 
             ? 'border-accent-rose/40 bg-accent-rose/5' 
-            : percent >= 100
+            : isCompleted
             ? 'border-accent-emerald/30 bg-accent-emerald/[0.02]'
             : 'border-border bg-card/25'
         } backdrop-blur-md flex flex-col justify-between gap-4`}
@@ -144,25 +203,14 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
         <div className="flex justify-between items-start gap-3">
           <div className="flex flex-col gap-1 select-text min-w-0 flex-1">
             <div className="flex items-center gap-2 max-w-full">
-              {goal.title.startsWith('http') ? (
-                <a
-                  href={goal.title}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-bold text-accent-indigo hover:text-accent-indigo/80 hover:underline text-sm break-all line-clamp-2"
-                  title={goal.title}
-                >
-                  {goal.title}
-                </a>
-              ) : (
-                <h3 className="font-bold text-gray-200 text-sm break-words line-clamp-2" title={goal.title}>
-                  {goal.title}
-                </h3>
-              )}
-              {percent >= 100 && (
+              <h3 className="font-bold text-gray-200 text-sm break-words line-clamp-2" title={goal.title}>
+                {goal.title}
+              </h3>
+              {isCompleted && (
                 <CheckCircle2 className="w-4 h-4 text-accent-emerald flex-shrink-0" />
               )}
             </div>
+            
             {goal.target_date && (
               <span className={`text-[10px] flex items-center gap-1 font-semibold ${isOverdue ? 'text-accent-rose' : 'text-gray-500'}`}>
                 <Calendar className="w-3 h-3" />
@@ -191,13 +239,80 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-4 mt-1 border-t border-border/20 pt-3 select-text">
-          <div className="flex flex-col">
+        {/* Dynamic hyperlink button if present */}
+        {goal.hyperlink && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              window.api.openExternalLink(goal.hyperlink!);
+            }}
+            className="flex items-center gap-1.5 bg-accent-indigo/10 border border-accent-indigo/25 text-accent-indigo px-2.5 py-1.5 rounded-lg text-[10px] font-bold w-fit hover:bg-accent-indigo/20 transition-all"
+            title={goal.hyperlink}
+          >
+            <ExternalLink className="w-3 h-3" />
+            <span>View Item</span>
+          </button>
+        )}
+
+        <div className="flex items-center justify-between gap-4 mt-1 border-t border-border/20 pt-3">
+          <div className="flex flex-col select-text min-w-0">
             <span className="text-[10px] uppercase font-bold text-gray-500">Allocated</span>
             <span className="text-sm font-extrabold text-white">
               {formatCurrency(goal.current_allocated)}
             </span>
             <span className="text-[9px] text-gray-500">of {formatCurrency(goal.target_amount)}</span>
+            
+            {/* Savings Velocity Info */}
+            {monthlyVelocityText && (
+              <span className="text-[10px] text-accent-indigo font-bold mt-1.5 block">
+                {monthlyVelocityText}
+              </span>
+            )}
+
+            {/* Quick Add Funds Input Trigger */}
+            {!isCompleted && (
+              <div className="mt-2.5">
+                {activeQuickAddId === goal.id ? (
+                  <form
+                    onSubmit={(e) => handleQuickAddSubmit(goal, e)}
+                    className="flex items-center gap-1.5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="Add..."
+                      autoFocus
+                      value={quickAddAmount}
+                      onChange={(e) => setQuickAddAmount(e.target.value)}
+                      onBlur={() => {
+                        // Delay clearing to allow clicking submit button/action
+                        setTimeout(() => setActiveQuickAddId(null), 200);
+                      }}
+                      className="w-20 bg-card/60 border border-border rounded-lg px-2 py-1 text-[10px] text-gray-200 focus:outline-none focus:border-accent-indigo font-semibold"
+                    />
+                    <button
+                      type="submit"
+                      className="text-[9px] font-bold text-accent-indigo hover:text-white"
+                    >
+                      Add
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveQuickAddId(goal.id);
+                      setQuickAddAmount('');
+                    }}
+                    className="flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-white transition-all bg-card/30 border border-border/60 hover:border-border px-2 py-1 rounded-lg"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Quick Add</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* SVG Circular Progress Meter */}
@@ -242,7 +357,9 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
           {title} ({list.length})
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {list.map((g) => renderGoalCard(g, isOverdue))}
+          <AnimatePresence>
+            {list.map((g) => renderGoalCard(g, isOverdue))}
+          </AnimatePresence>
         </div>
       </div>
     );
@@ -256,7 +373,7 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
       <div className="flex justify-between items-center select-none">
         <div>
           <h1 className="text-2xl font-bold text-gray-100 tracking-tight">Goals & Wishlist</h1>
-          <p className="text-sm text-gray-500 font-medium">Track your targets and milestones side-by-side.</p>
+          <p className="text-sm text-gray-500 font-medium">Track your targets, milestones, and wishlists side-by-side.</p>
         </div>
         <motion.button
           whileHover={{ scale: 1.02 }}
@@ -277,10 +394,48 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
         </div>
       ) : (
         <div className="flex flex-col gap-8">
-          {renderSection('⚠️ Overdue Targets', categorizedGoals.overdue, true)}
-          {renderSection('📅 Short-Term Goals (< 12 Months)', categorizedGoals.shortTerm)}
-          {renderSection('🚀 Long-Term Wealth Milestones', categorizedGoals.longTerm)}
-          {renderSection('♾️ Ongoing Goals', categorizedGoals.ongoing)}
+          {renderSection('⚠️ Overdue Targets', categorizedPending.overdue, true)}
+          {renderSection('📅 Short-Term Goals (< 12 Months)', categorizedPending.shortTerm)}
+          {renderSection('🚀 Long-Term Wealth Milestones', categorizedPending.longTerm)}
+          {renderSection('♾️ Ongoing Goals', categorizedPending.ongoing)}
+          
+          {/* Achieved Accordion Drawer */}
+          {achievedGoals.length > 0 && (
+            <div className="border border-border bg-card/10 rounded-2xl p-4 mt-6">
+              <button
+                onClick={() => setIsAchievedOpen(!isAchievedOpen)}
+                className="w-full flex items-center justify-between font-bold text-gray-200 text-sm py-2 select-none"
+              >
+                <span className="flex items-center gap-2">
+                  <span>Achieved Milestones 🏆</span>
+                  <span className="bg-accent-emerald/10 text-accent-emerald text-xs px-2 py-0.5 rounded-full font-bold">
+                    {achievedGoals.length}
+                  </span>
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isAchievedOpen ? 'rotate-180' : ''}`} />
+              </button>
+              
+              <AnimatePresence initial={false}>
+                {isAchievedOpen && (
+                  <motion.div
+                    initial="collapsed"
+                    animate="open"
+                    exit="collapsed"
+                    variants={{
+                      open: { opacity: 1, height: 'auto', marginTop: 16 },
+                      collapsed: { opacity: 0, height: 0, marginTop: 0 }
+                    }}
+                    transition={{ duration: 0.3, ease: [0.04, 0.62, 0.23, 0.98] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                      {achievedGoals.map((g) => renderGoalCard(g))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
       )}
 
@@ -310,7 +465,7 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 {/* Title */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-gray-400">Goal Title</label>
+                  <label className="text-xs font-semibold text-gray-400">Goal Title *</label>
                   <input
                     type="text"
                     required
@@ -321,9 +476,21 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
                   />
                 </div>
 
+                {/* Product Hyperlink */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-gray-400">Product Hyperlink (Optional)</label>
+                  <input
+                    type="url"
+                    placeholder="https://amazon.in/..."
+                    value={formData.hyperlink}
+                    onChange={(e) => setFormData({ ...formData, hyperlink: e.target.value })}
+                    className="w-full bg-card/50 border border-border rounded-xl px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-accent-indigo"
+                  />
+                </div>
+
                 {/* Target Amount */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-gray-400">Target Amount (INR)</label>
+                  <label className="text-xs font-semibold text-gray-400">Target Amount (INR) *</label>
                   <input
                     type="number"
                     step="any"
@@ -337,7 +504,7 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
 
                 {/* Manually Allocated Capital */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-gray-400">Manually Allocated Capital (INR)</label>
+                  <label className="text-xs font-semibold text-gray-400">Allocated Capital (INR)</label>
                   <input
                     type="number"
                     step="any"

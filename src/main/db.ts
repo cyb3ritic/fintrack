@@ -88,18 +88,24 @@ export function initDatabase() {
       title TEXT NOT NULL,
       target_amount REAL NOT NULL,
       current_allocated REAL DEFAULT 0,
-      target_date TEXT
+      target_date TEXT,
+      hyperlink TEXT
     )
   `);
 
-  // Remove linked_asset_id from goals if present
-  const goalColumns = db.prepare("PRAGMA table_info(financial_goals)").all() as { name: string }[];
+  // Remove linked_asset_id from goals if present and ensure hyperlink column exists
+  let goalColumns = db.prepare("PRAGMA table_info(financial_goals)").all() as { name: string }[];
   if (goalColumns.some(col => col.name === 'linked_asset_id')) {
     db.exec(`
-      CREATE TABLE goals_new AS SELECT id, title, target_amount, current_allocated, target_date FROM financial_goals;
+      CREATE TABLE goals_new AS SELECT id, title, target_amount, current_allocated, target_date, NULL as hyperlink FROM financial_goals;
       DROP TABLE financial_goals;
       ALTER TABLE goals_new RENAME TO financial_goals;
     `);
+    goalColumns = db.prepare("PRAGMA table_info(financial_goals)").all() as { name: string }[];
+  }
+
+  if (!goalColumns.some(col => col.name === 'hyperlink')) {
+    db.exec(`ALTER TABLE financial_goals ADD COLUMN hyperlink TEXT;`);
   }
 
   // Populate Default Categories if empty
@@ -443,16 +449,18 @@ export function addGoal(goal: {
   target_amount: number;
   current_allocated: number;
   target_date?: string | null;
+  hyperlink?: string | null;
 }) {
   const stmt = db.prepare(`
-    INSERT INTO financial_goals (title, target_amount, current_allocated, target_date)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO financial_goals (title, target_amount, current_allocated, target_date, hyperlink)
+    VALUES (?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     goal.title,
     goal.target_amount,
     goal.current_allocated || 0,
-    goal.target_date || null
+    goal.target_date || null,
+    goal.hyperlink || null
   );
   return { id: Number(result.lastInsertRowid), ...goal };
 }
@@ -464,17 +472,19 @@ export function updateGoal(
     target_amount: number;
     current_allocated: number;
     target_date?: string | null;
+    hyperlink?: string | null;
   }
 ) {
   db.prepare(`
     UPDATE financial_goals
-    SET title = ?, target_amount = ?, current_allocated = ?, target_date = ?
+    SET title = ?, target_amount = ?, current_allocated = ?, target_date = ?, hyperlink = ?
     WHERE id = ?
   `).run(
     goal.title,
     goal.target_amount,
     goal.current_allocated || 0,
     goal.target_date || null,
+    goal.hyperlink || null,
     id
   );
   return { id, ...goal };

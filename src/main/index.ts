@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -161,6 +161,10 @@ ipcMain.handle('db:update-goal', async (_, id, goal) => {
 
 ipcMain.handle('db:delete-goal', async (_, id) => {
   return db.deleteGoal(id);
+});
+
+ipcMain.handle('sys:open-external-link', async (_, url) => {
+  return shell.openExternal(url);
 });
 
 // ----------------------------------------------------

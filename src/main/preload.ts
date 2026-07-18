@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('api', {
   addGoal: (goal: any) => ipcRenderer.invoke('db:add-goal', goal),
   updateGoal: (id: number, goal: any) => ipcRenderer.invoke('db:update-goal', id, goal),
   deleteGoal: (id: number) => ipcRenderer.invoke('db:delete-goal', id),
+  openExternalLink: (url: string) => ipcRenderer.invoke('sys:open-external-link', url),
 
   // Backup & Restore
   backupDatabase: (password: string) => ipcRenderer.invoke('sys:backup', password),

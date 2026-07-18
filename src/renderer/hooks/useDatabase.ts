@@ -18,6 +18,7 @@ export interface Goal {
   target_amount: number;
   current_allocated: number;
   target_date?: string | null;
+  hyperlink?: string | null;
   isCompleted: boolean;
 }
 
@@ -104,6 +105,7 @@ declare global {
       addGoal: (goal: Omit<Goal, 'id' | 'isCompleted'>) => Promise<Goal>;
       updateGoal: (id: number, goal: Omit<Goal, 'id' | 'isCompleted'>) => Promise<Goal>;
       deleteGoal: (id: number) => Promise<{ id: number }>;
+      openExternalLink: (url: string) => Promise<any>;
 
       backupDatabase: (password: string) => Promise<{ success: boolean; filePath?: string; error?: string }>;
       selectBackupFile: () => Promise<{ canceled: boolean; filePath?: string }>;
