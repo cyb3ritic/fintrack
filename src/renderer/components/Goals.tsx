@@ -142,9 +142,23 @@ export default function Goals({ goals, addGoal, updateGoal, deleteGoal }: GoalsP
         } backdrop-blur-md flex flex-col justify-between gap-4`}
       >
         <div className="flex justify-between items-start gap-3">
-          <div className="flex flex-col gap-1 select-text">
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-gray-200 text-sm">{goal.title}</h3>
+          <div className="flex flex-col gap-1 select-text min-w-0 flex-1">
+            <div className="flex items-center gap-2 max-w-full">
+              {goal.title.startsWith('http') ? (
+                <a
+                  href={goal.title}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold text-accent-indigo hover:text-accent-indigo/80 hover:underline text-sm break-all line-clamp-2"
+                  title={goal.title}
+                >
+                  {goal.title}
+                </a>
+              ) : (
+                <h3 className="font-bold text-gray-200 text-sm break-words line-clamp-2" title={goal.title}>
+                  {goal.title}
+                </h3>
+              )}
               {percent >= 100 && (
                 <CheckCircle2 className="w-4 h-4 text-accent-emerald flex-shrink-0" />
               )}
