@@ -1,45 +1,28 @@
 import React, { createContext, useContext, useState } from 'react';
 
-export type CurrencyCode = 'INR' | 'USD' | 'EUR' | 'GBP';
+export type CurrencyCode = 'INR';
 
 interface CurrencyContextType {
   currency: CurrencyCode;
-  setCurrency: (code: CurrencyCode) => void;
   formatCurrency: (value: number, includeDecimals?: boolean) => string;
 }
 
 const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
 
-const localeMap: Record<CurrencyCode, string> = {
-  INR: 'en-IN',
-  USD: 'en-US',
-  EUR: 'de-DE',
-  GBP: 'en-GB',
-};
-
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
-  const [currency, setCurrencyState] = useState<CurrencyCode>(() => {
-    const stored = localStorage.getItem('fintrack_currency');
-    return (stored as CurrencyCode) || 'INR';
-  });
-
-  const setCurrency = (code: CurrencyCode) => {
-    setCurrencyState(code);
-    localStorage.setItem('fintrack_currency', code);
-  };
+  const [currency] = useState<CurrencyCode>('INR');
 
   const formatCurrency = (value: number, includeDecimals = false) => {
-    const locale = localeMap[currency] || 'en-US';
-    return new Intl.NumberFormat(locale, {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: currency,
+      currency: 'INR',
       minimumFractionDigits: includeDecimals ? 2 : 0,
       maximumFractionDigits: includeDecimals ? 2 : 0,
     }).format(value);
   };
 
   return (
-    <CurrencyContext.Provider value={{ currency, setCurrency, formatCurrency }}>
+    <CurrencyContext.Provider value={{ currency, formatCurrency }}>
       {children}
     </CurrencyContext.Provider>
   );

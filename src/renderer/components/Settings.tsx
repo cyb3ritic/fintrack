@@ -6,8 +6,6 @@ import {
   DownloadCloud, 
   UploadCloud, 
   RefreshCw, 
-  Globe, 
-  ChevronDown, 
   Plus, 
   Pencil, 
   Trash2, 
@@ -28,12 +26,15 @@ import {
   Lock,
   Coins,
   CircleDot,
-  FolderOpen
+  FolderOpen,
+  Github,
+  Info,
+  Save
 } from 'lucide-react';
 import { useToast } from './Toast';
-import { useCurrency, CurrencyCode } from '../context/CurrencyContext';
 import { Budget, Category } from '../hooks/useDatabase';
 import { motion, AnimatePresence } from 'framer-motion';
+import packageJson from '../../../package.json';
 
 interface SettingsProps {
   categories: Category[];
@@ -66,7 +67,6 @@ const ICON_OPTIONS = [
 
 export default function Settings({ categories, addCategory, updateCategory, deleteCategory, budgets, setBudget, budgetMonthYear, setBudgetMonthYear }: SettingsProps) {
   const { showToast } = useToast();
-  const { currency, setCurrency } = useCurrency();
 
   const [activeSubTab, setActiveSubTab] = useState<'preferences' | 'categories' | 'budgets'>('preferences');
 
@@ -358,6 +358,42 @@ export default function Settings({ categories, addCategory, updateCategory, dele
     setBudgetDrafts((prev) => ({ ...prev, [categoryId]: value }));
   };
 
+  const hasUnsavedBudgets = categories
+    .filter((c) => c.type === 'expense')
+    .some((cat) => {
+      const stored = budgets.find((b) => b.category_id === cat.id);
+      const draft = budgetDrafts[cat.id] ?? '';
+      const storedStr = stored?.budget_amount != null ? String(stored.budget_amount) : '';
+      return draft !== storedStr;
+    });
+
+  const handleSaveAllBudgets = async () => {
+    const expenseCategories = categories.filter((c) => c.type === 'expense');
+    const changed = expenseCategories.filter((cat) => {
+      const stored = budgets.find((b) => b.category_id === cat.id);
+      const draft = budgetDrafts[cat.id] ?? '';
+      const storedStr = stored?.budget_amount != null ? String(stored.budget_amount) : '';
+      return draft !== storedStr;
+    });
+
+    if (changed.length === 0) return;
+
+    try {
+      setIsSavingBudgets(true);
+      await Promise.all(
+        changed.map((cat) => {
+          const amount = Number(budgetDrafts[cat.id] ?? '0');
+          return setBudget(cat.id, Number.isFinite(amount) ? amount : 0, budgetMonthYear);
+        })
+      );
+      showToast(`Updated ${changed.length} budget${changed.length > 1 ? 's' : ''} successfully.`, 'success');
+    } catch (err: any) {
+      showToast(`Bulk save failed: ${err.message}`, 'error');
+    } finally {
+      setIsSavingBudgets(false);
+    }
+  };
+
   useEffect(() => {
     const nextDrafts: Record<number, string> = {};
     budgets.forEach((budget) => {
@@ -434,30 +470,34 @@ export default function Settings({ categories, addCategory, updateCategory, dele
               transition={{ duration: 0.15 }}
               className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start max-w-4xl"
             >
-              {/* Global Currency Selector */}
+              {/* App Info Card */}
               <div className="p-6 rounded-2xl border border-border bg-card/25 backdrop-blur-md flex flex-col gap-4 md:col-span-2">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-accent-indigo/10 text-accent-indigo">
-                    <Globe className="w-5 h-5" />
+                  <div className="p-2.5 rounded-xl bg-gradient-to-tr from-accent-indigo to-accent-emerald text-white shadow-glow-indigo">
+                    <Info className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-gray-200">Global Currency</h3>
-                    <p className="text-xs text-gray-500">Select display-only formatting currency across the ledger and overview dashboard.</p>
+                    <h3 className="text-sm font-bold text-gray-200">FinTrack</h3>
+                    <p className="text-xs text-gray-500">Secure, local-first desktop expense tracker.</p>
                   </div>
                 </div>
 
-                <div className="relative">
-                  <select
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
-                    className="w-full appearance-none bg-card/50 border border-border rounded-xl pl-3 pr-10 py-3 text-sm text-gray-200 focus:outline-none focus:border-accent-indigo"
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-900/30 p-4 rounded-xl border border-border/50">
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-sm font-bold text-gray-200">v{packageJson.version}</span>
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-accent-emerald bg-accent-emerald/10 px-2 py-0.5 rounded">latest</span>
+                    </div>
+                    <span className="text-xs text-gray-500">by <span className="font-semibold text-gray-400">cyb3ritic</span></span>
+                  </div>
+
+                  <button
+                    onClick={() => window.api.openExternalLink(packageJson.repository.url)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border hover:bg-gray-800/40 text-gray-400 hover:text-gray-200 font-semibold text-sm transition-colors"
                   >
-                    <option value="INR" className="bg-[#161920] text-gray-200">INR (₹) - Indian Rupee (Default)</option>
-                    <option value="USD" className="bg-[#161920] text-gray-200">USD ($) - United States Dollar</option>
-                    <option value="EUR" className="bg-[#161920] text-gray-200">EUR (€) - Euro</option>
-                    <option value="GBP" className="bg-[#161920] text-gray-200">GBP (£) - British Pound Sterling</option>
-                  </select>
-                  <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3.5 top-3.5 pointer-events-none" />
+                    <Github className="w-4 h-4" />
+                    <span>View on GitHub</span>
+                  </button>
                 </div>
               </div>
 
@@ -476,7 +516,7 @@ export default function Settings({ categories, addCategory, updateCategory, dele
                 <div className="text-xs font-semibold text-gray-400 bg-gray-900/30 p-3 rounded-xl border border-border/50 flex gap-2.5 leading-relaxed">
                   <ShieldCheck className="w-5 h-5 text-accent-emerald flex-shrink-0" />
                   <span>
-                    Backup files are compressed and encrypted using **AES-256-GCM** via your password. Stored locally without cloud uploads.
+                    Backup files are compressed and encrypted using <strong className="text-gray-300">AES-256-GCM</strong> via your password. Stored locally without cloud uploads.
                   </span>
                 </div>
 
@@ -530,7 +570,7 @@ export default function Settings({ categories, addCategory, updateCategory, dele
                 <div className="text-xs font-semibold text-accent-rose bg-accent-rose/10 p-3 rounded-xl border border-accent-rose/20 flex gap-2.5 leading-relaxed">
                   <ShieldAlert className="w-5 h-5 flex-shrink-0 text-accent-rose" />
                   <span>
-                    **WARNING**: Restoring from a backup replaces your current offline database entirely. Any unbacked-up data in the vault will be lost.
+                    <strong className="text-accent-rose">WARNING</strong>: Restoring from a backup replaces your current offline database entirely. Any unbacked-up data in the vault will be lost.
                   </span>
                 </div>
 
@@ -552,9 +592,9 @@ export default function Settings({ categories, addCategory, updateCategory, dele
                   <div className="p-2.5 rounded-xl bg-accent-indigo/10 text-accent-indigo">
                     <RefreshCw className={`w-5 h-5 ${isCheckingUpdate || (downloadProgress && downloadProgress.percent < 100) ? 'animate-spin' : ''}`} />
                   </div>
-                  <div>
+                  <div className="flex items-center gap-2.5">
                     <h3 className="text-sm font-bold text-gray-200">Software Updates</h3>
-                    <p className="text-xs text-gray-500">Check for updates and download standalone releases from GitHub.</p>
+                    <span className="text-[10px] font-mono text-gray-500 bg-gray-900/40 px-2 py-0.5 rounded">v{packageJson.version}</span>
                   </div>
                 </div>
 
@@ -626,14 +666,31 @@ export default function Settings({ categories, addCategory, updateCategory, dele
                     <h3 className="text-sm font-bold text-gray-200">Monthly Budget Manager</h3>
                     <p className="text-xs text-gray-500">Set spending caps for each expense category for the selected month.</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-semibold text-gray-500">Month</label>
-                    <input
-                      type="month"
-                      value={budgetMonthYear}
-                      onChange={(e) => setBudgetMonthYear(e.target.value)}
-                      className="rounded-xl border border-border bg-background/70 px-3 py-2 text-sm text-gray-100 outline-none"
-                    />
+                  <div className="flex items-center gap-3">
+                    <AnimatePresence>
+                      {hasUnsavedBudgets && (
+                        <motion.button
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.9 }}
+                          onClick={handleSaveAllBudgets}
+                          disabled={isSavingBudgets}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent-emerald text-white font-semibold text-xs shadow-glow-emerald transition-all disabled:opacity-50"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          {isSavingBudgets ? 'Saving...' : 'Save All'}
+                        </motion.button>
+                      )}
+                    </AnimatePresence>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-semibold text-gray-500">Month</label>
+                      <input
+                        type="month"
+                        value={budgetMonthYear}
+                        onChange={(e) => setBudgetMonthYear(e.target.value)}
+                        className="rounded-xl border border-border bg-background/70 px-3 py-2 text-sm text-gray-100 outline-none"
+                      />
+                    </div>
                   </div>
                 </div>
 

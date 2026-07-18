@@ -38,7 +38,7 @@ const itemVariants = {
 };
 
 export default function Dashboard({ stats, transactions, budgets, isLoading, range, setRange }: DashboardProps) {
-  const { formatCurrency, currency } = useCurrency();
+  const { formatCurrency } = useCurrency();
 
   const [isChartMasked, setIsChartMasked] = useState<boolean>(() =>
     sessionStorage.getItem('mask_dashboard_chart') === null ? true : sessionStorage.getItem('mask_dashboard_chart') === 'true'
@@ -117,12 +117,7 @@ export default function Dashboard({ stats, transactions, budgets, isLoading, ran
   }, [transactions, currentDate]);
 
   const getSymbol = () => {
-    switch (currency) {
-      case 'USD': return '$';
-      case 'EUR': return '€';
-      case 'GBP': return '£';
-      default: return '₹';
-    }
+    return '₹';
   };
 
   const liquidBalance = stats?.liquidBalance ?? 0;
